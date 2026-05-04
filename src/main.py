@@ -1,3 +1,5 @@
+import math
+
 import gurobipy as gp
 from gurobipy import GRB
 from utils.data_importer import parse_instance_file
@@ -6,7 +8,7 @@ from utils.road_network_formulation import *
 # Create model
 model = gp.Model("customer-graph_formulation")
 
-instance = parse_instance_file("data\\15-0-1.dat")
+instance = parse_instance_file("data\\15-50-1.dat")
 
 v_nodes = set(node.id for node in instance._graph.nodes)
 w_nodes = set(node.id for node in instance._graph.nodes if isinstance(node, W_Node))
@@ -15,7 +17,8 @@ v_ranks = {node.id: node.V_rank for node in instance._graph.nodes if isinstance(
 v_sto = instance._V_sto
 m = list(range(1, instance._num_tours + 1))
 waste = {node.id: node.waste for node in instance._graph.nodes if isinstance(node, W_Node)}
-Q = instance._vehicle_capacity
+Q = max(instance._vehicle_capacity, math.ceil(1.05 * instance._total_waste / len(m)))
+
 sigma = instance._depot_node
 t_sto = 5
 
@@ -26,7 +29,7 @@ y = model.addVars([(j, k) for j in v_sto for k in m], vtype=GRB.BINARY, name="y"
 # 1j
 x = model.addVars([(arc[0], arc[1], k) for arc in arcs for k in m], vtype=GRB.INTEGER, lb=0, name="x")
 
-q = model.addVars([(j, k) for j in v_sto for k in m], vtype=GRB.INTEGER, lb=0, name="q")
+q = model.addVars([(j, k) for j in v_sto for k in m], vtype=GRB.CONTINUOUS, lb=0, name="q")
 f = model.addVars([(arc[0], arc[1], k) for arc in arcs for k in m], vtype=GRB.CONTINUOUS, lb=0, name="f")
 
 # 1b
@@ -39,7 +42,7 @@ for i in w_nodes:
             model.addConstr(gp.quicksum(z[i, jp] for jp in v_ranks[i] if instance.rank(i, jp) > instance.rank(i, j)) <= 1 - y[j, k], name=f"1c_{i}_{j}_{k}")
 # 1d
 for j in v_sto:
-    model.addConstr(gp.quicksum(waste[i]*z[i, j] for i in w_nodes for j in v_ranks[i]) <= gp.quicksum(q[j, k] for k in m), name=f"1d_{j}")
+    model.addConstr(gp.quicksum(waste[i]*z[i, j] for i in w_nodes if j in v_ranks[i]) == gp.quicksum(q[j, k] for k in m), name=f"1d_{j}")
 # 1e
 for k in m:
     model.addConstr(gp.quicksum(q[j, k] for j in v_sto) <= Q, name=f"1e_{k}")
@@ -76,17 +79,15 @@ model.setObjective(gp.quicksum(cost[arc]*x[arc[0], arc[1], k] for k in m for arc
 # Optimize
 model.optimize()
 
+
+if model.status == GRB.INFEASIBLE:
+    model.computeIIS()
+    model.write("model.ilp")   # human-readable IIS
+    print("Wrote IIS to model.ilp / model.iis")
+
+
 # Print result
 if model.status == GRB.OPTIMAL:
     print(f"Optimal objective value: {model.objVal}")
-    for k in m:
-        print(f"Tour {k}:")
-        tour_arcs = [(arc, x[arc[0], arc[1], k].x) for arc in arcs if x[arc[0], arc[1], k].x > 0.5]
-        tour_nodes = set()
-        for arc, val in tour_arcs:
-            tour_nodes.add(arc[0])
-            tour_nodes.add(arc[1])
-        print(f"  Nodes: {tour_nodes}")
-        print(f"  Arcs: {tour_arcs}")
 else:
     print("No optimal solution found.")
