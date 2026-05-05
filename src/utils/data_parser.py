@@ -55,14 +55,14 @@ class RoadNetworkFormulation:
                         formulation.cost[(int(arc_data[0]), int(arc_data[1]))] = int(arc_data[2])
                         c += 1
                 # PARSE W NODES
-                elif line.startswith("Nodes (W)"):
+                elif line.startswith("DemandNodes (W)"):
                     c += 3 # SKIP USELESS METADATA
                     while lines[c].strip() != "END":
                         node_data = lines[c].strip().split()
                         formulation.w_nodes.add(int(node_data[0]))
                         formulation.demand[int(node_data[0])] = int(node_data[1])
                         formulation.v_ranks[int(node_data[0])] = []
-                        for rank_node in node_data[2][1:-1].split(","): # REMOVE SQUARE BRACKETS AND SPLIT BY COMMA
+                        for rank_node in lines[c].strip().split("[")[-1].split("]")[0].split(","): # REMOVE SQUARE BRACKETS AND SPLIT BY COMMA
                             formulation.v_ranks[int(node_data[0])].append(int(rank_node.strip()))
                         c += 1
                 c += 1
@@ -73,6 +73,12 @@ class RoadNetworkFormulation:
         # Parse the content of the .dat file and populate the formulation attributes
         # This is a placeholder for the actual parsing logic, which will depend on the format of the .dat file
         return formulation
+    
+    def rank(self, i: int, j: int) -> int:
+        if j in self.v_ranks[i]:
+            return self.v_ranks[i].index(j)
+        else:
+            raise ValueError(f"Node {j} is not in the rank list of node {i}")
 
 class CustomerBasedFormulation:
     pass
@@ -87,6 +93,16 @@ def main():
     print("OK")
     print(f"|V ∪ W|={len(formulation.v_nodes | formulation.w_nodes)} |A|={len(formulation.arcs)} |Vsto|={len(formulation.v_sto)}")
     print(f"sigma={formulation.sigma} gamma={formulation.t_sto} m={len(formulation.M)} Q={formulation.Q} dtot={formulation.dtot}")
+    print("V_ranks:")
+    for w in formulation.w_nodes:
+        print(f"  w{w}: {formulation.v_ranks[w]}")
+    print("Costs:")
+    for arc in formulation.arcs:
+        print(f"  {arc}: {formulation.cost[arc]}")
+    print("Demands:")
+    for w in formulation.w_nodes:
+        print(f"  w{w}: {formulation.demand[w]}")
+    print("V_sto:", formulation.v_sto)
 
 if __name__ == "__main__":
     main()
