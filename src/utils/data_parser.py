@@ -81,7 +81,38 @@ class RoadNetworkFormulation:
             raise ValueError(f"Node {j} is not in the rank list of node {i}")
 
 class CustomerBasedFormulation:
-    pass
+    def __init__(self) -> None:
+        self.v_nodes: Set[int] = set()
+        self.w_nodes: Set[int] = set()
+        self.arcs: set[Tuple[int, int]] = set()
+        self.cost: Dict[Tuple[int, int], int] = {}
+        self.v_sto: Set[int] = set()
+        self.v_ranks: Dict[int, List[int]] = {}
+        self.M: Set[int] = set()
+        self.demand: Dict[int, int] = {}
+        self.dtot: int = 0
+        self.Q: float = 0.0
+        self.sigma: int = 0
+        self.t_sto: float = 0
+
+    @staticmethod
+    def parse_instance_file(dat_path: str) -> CustomerBasedFormulation:
+        RN = RoadNetworkFormulation().parse_instance_file(dat_path)
+        formulation = CustomerBasedFormulation()
+        formulation.v_nodes = RN.v_sto.union({RN.sigma})
+        formulation.w_nodes = RN.w_nodes
+        formulation.v_sto = RN.v_sto
+        formulation.v_ranks = RN.v_ranks
+        formulation.M = RN.M
+        formulation.demand = RN.demand
+        formulation.dtot = RN.dtot
+        formulation.Q = RN.Q
+        formulation.sigma = RN.sigma
+        formulation.t_sto = RN.t_sto
+        # CREATE A' AND ARC'
+        return formulation
+
+        
 
 
 def main():
