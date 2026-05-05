@@ -2,25 +2,24 @@ import math
 
 import gurobipy as gp
 from gurobipy import GRB
-from utils.data_importer import parse_instance_file
-from utils.road_network_formulation import *
+from utils.data_parser import RoadNetworkFormulation
 
 # Create model
 model = gp.Model("customer-graph_formulation")
 
-instance = parse_instance_file("data\\15-50-1.dat")
+instance = RoadNetworkFormulation.parse_instance_file("C:\\Users\\simone\\source\\repos\\mathematical-optimization\\data\\15-0-1.dat")
 
-v_nodes = set(node.id for node in instance._graph.nodes)
-w_nodes = set(node.id for node in instance._graph.nodes if isinstance(node, W_Node))
-arcs, cost = gp.multidict({(edge.i, edge.j): edge.c for edge in instance._graph.edges})
-v_ranks = {node.id: node.V_rank for node in instance._graph.nodes if isinstance(node, W_Node)}
-v_sto = instance._V_sto
-m = list(range(1, instance._num_tours + 1))
-waste = {node.id: node.waste for node in instance._graph.nodes if isinstance(node, W_Node)}
-Q = max(instance._vehicle_capacity, math.ceil(1.05 * instance._total_waste / len(m)))
-
-sigma = instance._depot_node
-t_sto = 5
+v_nodes = instance.v_nodes
+w_nodes = instance.w_nodes
+arcs = instance.arcs
+cost = instance.cost
+v_ranks = instance.v_ranks
+v_sto = instance.v_sto
+m = instance.M
+waste = instance.demand
+Q = instance.Q
+sigma = instance.sigma
+t_sto = instance.t_sto
 
 # 1l
 z = model.addVars([(i, j) for i in w_nodes for j in v_nodes], vtype=GRB.BINARY, name="z")
@@ -58,7 +57,7 @@ for h in v_nodes:
 for k in m:
     for h in v_sto:
         model.addConstr(gp.quicksum(f[h, hp, k] for hp in v_nodes if (h, hp) in arcs) - gp.quicksum(f[hp, h, k] for hp in v_nodes if (hp, h) in arcs) == q[h, k], name=f"1h_{h}_{k}")
-    for h in v_nodes.difference(v_sto.union({instance._depot_node})):
+    for h in v_nodes.difference(v_sto.union({sigma})):
         model.addConstr(gp.quicksum(f[h, hp, k] for hp in v_nodes if (h, hp) in arcs) - gp.quicksum(f[hp, h, k] for hp in v_nodes if (hp, h) in arcs) == 0, name=f"1h_{h}_{k}")
 # 1i
 for k in m:
