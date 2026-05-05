@@ -6,6 +6,7 @@ from utils.data_parser import RoadNetworkFormulation
 
 # Create model
 model = gp.Model("customer-graph_formulation")
+VALID_INEQUALITY_ENABLED = True
 
 instance = RoadNetworkFormulation.parse_instance_file("C:\\Users\\simone\\source\\repos\\mathematical-optimization\\data\\200-100-2.dat")
 
@@ -140,6 +141,37 @@ model.addConstrs(
     ),
     name="1n"
 )
+
+# VALID INEQUALITIES
+if VALID_INEQUALITY_ENABLED:
+    s = model.addVars(v_sto, vtype=GRB.BINARY, name="s")
+
+    # 2a
+    model.addConstrs(
+        (
+            s[j] <= gp.quicksum(y[j, k] for k in m)
+            for j in v_sto
+        ),
+        name="2a"
+    )
+
+    # 2b
+    model.addConstrs(
+        (
+            s[j] >= y[j, k]
+            for j in v_sto
+            for k in m
+        ),
+        name="2b"
+    )
+
+    # 2c
+    model.addConstr(
+        (
+            gp.quicksum(y[j, k] - s[j] for j in v_sto for k in m) <= len(m) - 1
+        ),
+        name="2c"
+    )
 
 # 1a
 model.setObjective(
