@@ -7,14 +7,14 @@ from typing import Dict, Tuple, List, Set, Optional
 
 class RoadNetworkFormulation:
     def __init__(self) -> None:
-        self.v_nodes: Set[int] = set()
-        self.w_nodes: Set[int] = set()
-        self.arcs: set[Tuple[int, int]] = set()
-        self.cost: Dict[Tuple[int, int], int] = {}
-        self.v_sto: Set[int] = set()
-        self.v_ranks: Dict[int, List[int]] = {}
+        self.V: Set[int] = set()
+        self.W: Set[int] = set()
+        self.A: set[Tuple[int, int]] = set()
+        self.c: Dict[Tuple[int, int], int] = {}
+        self.V_sto: Set[int] = set()
+        self.V_rank: Dict[int, List[int]] = {}
         self.M: Set[int] = set()
-        self.demand: Dict[int, int] = {}
+        self.d: Dict[int, int] = {}
         self.dtot: int = 0
         self.Q: float = 0.0
         self.sigma: int = 0
@@ -42,28 +42,28 @@ class RoadNetworkFormulation:
                     c += 3 # SKIP USELESS METADATA
                     while lines[c].strip() != "END":
                         node_data = lines[c].strip().split()
-                        formulation.v_nodes.add(int(node_data[0]))
+                        formulation.V.add(int(node_data[0]))
                         if node_data[1] == "true":
-                            formulation.v_sto.add(int(node_data[0]))
+                            formulation.V_sto.add(int(node_data[0]))
                         c += 1
                 # PARSE ARCS
                 elif line.startswith("Arcs (A)"):
                     c += 3 # SKIP USELESS METADATA
                     while lines[c].strip() != "END":
                         arc_data = lines[c].strip().split()
-                        formulation.arcs.add((int(arc_data[0]), int(arc_data[1])))
-                        formulation.cost[(int(arc_data[0]), int(arc_data[1]))] = int(arc_data[2])
+                        formulation.A.add((int(arc_data[0]), int(arc_data[1])))
+                        formulation.c[(int(arc_data[0]), int(arc_data[1]))] = int(arc_data[2])
                         c += 1
                 # PARSE W NODES
                 elif line.startswith("DemandNodes (W)"):
                     c += 3 # SKIP USELESS METADATA
                     while lines[c].strip() != "END":
                         node_data = lines[c].strip().split()
-                        formulation.w_nodes.add(int(node_data[0]))
-                        formulation.demand[int(node_data[0])] = int(node_data[1])
-                        formulation.v_ranks[int(node_data[0])] = []
+                        formulation.W.add(int(node_data[0]))
+                        formulation.d[int(node_data[0])] = int(node_data[1])
+                        formulation.V_rank[int(node_data[0])] = []
                         for rank_node in lines[c].strip().split("[")[-1].split("]")[0].split(","): # REMOVE SQUARE BRACKETS AND SPLIT BY COMMA
-                            formulation.v_ranks[int(node_data[0])].append(int(rank_node.strip()))
+                            formulation.V_rank[int(node_data[0])].append(int(rank_node.strip()))
                         c += 1
                 c += 1
         # DERIVE Q AS PER SECTION 6.1 OF THE PAPER
@@ -75,21 +75,21 @@ class RoadNetworkFormulation:
         return formulation
     
     def rank(self, i: int, j: int) -> int:
-        if j in self.v_ranks[i]:
-            return self.v_ranks[i].index(j)
+        if j in self.V_rank[i]:
+            return self.V_rank[i].index(j)
         else:
             raise ValueError(f"Node {j} is not in the rank list of node {i}")
 
 class CustomerBasedFormulation:
     def __init__(self) -> None:
-        self.v_nodes: Set[int] = set()
-        self.w_nodes: Set[int] = set()
-        self.arcs: set[Tuple[int, int]] = set()
-        self.cost: Dict[Tuple[int, int], int] = {}
-        self.v_sto: Set[int] = set()
-        self.v_ranks: Dict[int, List[int]] = {}
+        self.Vp: Set[int] = set()
+        self.W: Set[int] = set()
+        self.Ap: set[Tuple[int, int]] = set()
+        self.c: Dict[Tuple[int, int], int] = {}
+        self.V_sto: Set[int] = set()
+        self.V_rank: Dict[int, List[int]] = {}
         self.M: Set[int] = set()
-        self.demand: Dict[int, int] = {}
+        self.d: Dict[int, int] = {}
         self.dtot: int = 0
         self.Q: float = 0.0
         self.sigma: int = 0
@@ -99,18 +99,44 @@ class CustomerBasedFormulation:
     def parse_instance_file(dat_path: str) -> CustomerBasedFormulation:
         RN = RoadNetworkFormulation().parse_instance_file(dat_path)
         formulation = CustomerBasedFormulation()
-        formulation.v_nodes = RN.v_sto.union({RN.sigma})
-        formulation.w_nodes = RN.w_nodes
-        formulation.v_sto = RN.v_sto
-        formulation.v_ranks = RN.v_ranks
+        formulation.W = RN.W
+        formulation.V_sto = RN.V_sto
+        formulation.V_rank = RN.V_rank
         formulation.M = RN.M
-        formulation.demand = RN.demand
+        formulation.d = RN.d
         formulation.dtot = RN.dtot
         formulation.Q = RN.Q
         formulation.sigma = RN.sigma
         formulation.t_sto = RN.t_sto
-        # CREATE A' AND ARC'
+        # CREATE V'
+        formulation.Vp = RN.V_sto.union({RN.sigma})
+        # CREATE A'
+        for (j, jp) in zip(formulation.Vp, formulation.Vp):
+            if j == jp:
+                continue
+            shortest_path_cost = int("inf")
+            # Dijkstra's algorithm to find shortest path from j to jp in RN
+            unvisited = set(RN.V)
+            distances = {node: int("inf") for node in RN.V}
+            distances[j] = 0
+            while unvisited:
+                current = min(unvisited, key=lambda node: distances[node])
+                unvisited.remove(current)
+                for neighbor in RN.V:
+                    if (current, neighbor) in RN.A:
+                        alt = distances[current] + RN.c[(current, neighbor)]
+                        if alt < distances[neighbor]:
+                            distances[neighbor] = alt
+            shortest_path_cost = distances[jp]
+            formulation.Ap.add((j, jp))
+            formulation.c[(j, jp)] = shortest_path_cost
         return formulation
+    
+    def rank(self, i: int, j: int) -> int:
+        if j in self.V_rank[i]:
+            return self.V_rank[i].index(j)
+        else:
+            raise ValueError(f"Node {j} is not in the rank list of node {i}")
 
         
 
@@ -122,18 +148,18 @@ def main():
 
     formulation = RoadNetworkFormulation.parse_instance_file(args.path)
     print("OK")
-    print(f"|V ∪ W|={len(formulation.v_nodes | formulation.w_nodes)} |A|={len(formulation.arcs)} |Vsto|={len(formulation.v_sto)}")
+    print(f"|V ∪ W|={len(formulation.V | formulation.W)} |A|={len(formulation.A)} |Vsto|={len(formulation.V_sto)}")
     print(f"sigma={formulation.sigma} gamma={formulation.t_sto} m={len(formulation.M)} Q={formulation.Q} dtot={formulation.dtot}")
     print("V_ranks:")
-    for w in formulation.w_nodes:
-        print(f"  w{w}: {formulation.v_ranks[w]}")
+    for w in formulation.W:
+        print(f"  w{w}: {formulation.V_rank[w]}")
     print("Costs:")
-    for arc in formulation.arcs:
-        print(f"  {arc}: {formulation.cost[arc]}")
+    for arc in formulation.A:
+        print(f"  {arc}: {formulation.c[arc]}")
     print("Demands:")
-    for w in formulation.w_nodes:
-        print(f"  w{w}: {formulation.demand[w]}")
-    print("V_sto:", formulation.v_sto)
+    for w in formulation.W:
+        print(f"  w{w}: {formulation.d[w]}")
+    print("V_sto:", formulation.V_sto)
 
 if __name__ == "__main__":
     main()
