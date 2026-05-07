@@ -8,19 +8,22 @@ from utils.data_parser import RoadNetworkFormulation
 model = gp.Model("road-network_formulation")
 VALID_INEQUALITY_ENABLED = True
 
-instance = RoadNetworkFormulation.parse_instance_file("C:\\Users\\simone\\source\\repos\\mathematical-optimization\\data\\15-50-6.dat")
+instance = RoadNetworkFormulation.parse_instance_file("C:\\Users\\simone\\source\\repos\\mathematical-optimization\\data\\15-50-1.dat")
 
-V = instance.V
-W = instance.W
-A = instance.A
-c = instance.c
-V_rank = instance.V_rank
-V_sto = instance.V_sto
 M = instance.M
 d = instance.d
 Q = instance.Q
 sigma = instance.sigma
 t_sto = instance.t_sto
+V = instance.V
+W = instance.W
+A = instance.A
+# I BELIEVE THE COST FUNCTION SHOULD BE THE TRAVEL TIME, WHICH IS THE DISTANCE DIVIDED BY THE SPEED.
+# THE PAPER ASSUMES 14m/s FOR ARCS CONNECTING THE DEPOT AND 2m/s FOR ALL OTHER ARCS, AS PER SECTION 6.1 OF THE PAPER
+c = instance.c
+V_rank = instance.V_rank
+V_sto = instance.V_sto
+
 
 # 1l
 z = model.addVars([(i, j) for i in W for j in V_rank[i]], vtype=GRB.BINARY, name="z")

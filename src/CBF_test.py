@@ -8,7 +8,7 @@ from utils.data_parser import CustomerBasedFormulation
 model = gp.Model("customer-based_formulation")
 VALID_INEQUALITY_ENABLED = True
 
-instance = CustomerBasedFormulation.parse_instance_file("C:\\Users\\simone\\source\\repos\\mathematical-optimization\\data\\15-200-1.dat")
+instance = CustomerBasedFormulation.parse_instance_file("C:\\Users\\simone\\source\\repos\\mathematical-optimization\\data\\15-50-1.dat")
 
 Vp = instance.Vp
 W = instance.W

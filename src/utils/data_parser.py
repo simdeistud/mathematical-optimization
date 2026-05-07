@@ -10,7 +10,7 @@ class RoadNetworkFormulation:
         self.V: Set[int] = set()
         self.W: Set[int] = set()
         self.A: set[Tuple[int, int]] = set()
-        self.c: Dict[Tuple[int, int], int] = {}
+        self.c: Dict[Tuple[int, int], float] = {}
         self.V_sto: Set[int] = set()
         self.V_rank: Dict[int, List[int]] = {}
         self.M: Set[int] = set()
@@ -50,7 +50,11 @@ class RoadNetworkFormulation:
                     while lines[c].strip() != "END":
                         arc_data = lines[c].strip().split()
                         formulation.A.add((int(arc_data[0]), int(arc_data[1])))
-                        formulation.c[(int(arc_data[0]), int(arc_data[1]))] = int(arc_data[2])
+                        # THE PAPER ASSUMES 14m/s FOR ARCS CONNECTING THE DEPOT AND 2m/s FOR ALL OTHER ARCS, AS PER SECTION 6.1
+                        if int(arc_data[0]) == formulation.sigma or int(arc_data[1]) == formulation.sigma:
+                            formulation.c[(int(arc_data[0]), int(arc_data[1]))] = int(arc_data[2]) / 14
+                        else:
+                            formulation.c[(int(arc_data[0]), int(arc_data[1]))] = int(arc_data[2]) / 2
                         c += 1
                 # PARSE W NODES
                 elif line.startswith("DemandNodes (W)"):
@@ -95,7 +99,7 @@ class CustomerBasedFormulation:
         self.Vp: Set[int] = set()
         self.W: Set[int] = set()
         self.Ap: set[Tuple[int, int]] = set()
-        self.c: Dict[Tuple[int, int], int] = {}
+        self.c: Dict[Tuple[int, int], float] = {}
         self.V_sto: Set[int] = set()
         self.V_rank: Dict[int, List[int]] = {}
         self.M: Set[int] = set()
@@ -124,17 +128,17 @@ class CustomerBasedFormulation:
         # (ordered pairs, excluding self-loops)
         for j in formulation.Vp:
             for jp in formulation.Vp:
-                sp_cost = dijkstra_min_cost(
+                formulation.Ap.add((j, jp))
+                time = dijkstra_min_cost(
                         start=j,
                         end=jp,
                         nodes=RN.V | RN.W,
                         arcs=RN.A,
                         costs=RN.c,
                     )
-                if sp_cost == inf:
+                if time == inf:
                     raise ValueError(f"No path from {j} to {jp} in the underlying road network")   
-                formulation.Ap.add((j, jp))
-                formulation.c[(j, jp)] = int(sp_cost)
+                formulation.c[(j, jp)] = time
         return formulation
     
     def rank(self, i: int, j: int) -> int:
@@ -144,62 +148,46 @@ class CustomerBasedFormulation:
             raise ValueError(f"Node {j} is not in the rank list of node {i}")
 
 
+
 def dijkstra_min_cost(
     start: int,
     end: int,
     nodes: Set[int],
     arcs: Set[Tuple[int, int]],
-    costs: Dict[Tuple[int, int], int],
+    costs: Dict[Tuple[int, int], float],
 ) -> float:
     """
-    Heap-based Dijkstra on a directed graph.
+    Heap-based Dijkstra on a directed graph with float arc costs.
 
-    Parameters
-    ----------
-    start : int
-        Source node.
-    end : int
-        Target node.
-    nodes : Set[int]
-        Set of nodes (vertex set).
-    arcs : Set[Tuple[int,int]]
-        Set of directed arcs (u,v).
-    costs : Dict[Tuple[int,int], int]
-        Arc cost map (u,v) -> non-negative weight.
-
-    Returns
-    -------
-    float
-        Minimum path cost from start to end, or math.inf if unreachable.
-
-    Notes
-    -----
-    - Requires non-negative arc costs.
-    - Complexity: O(|A| log |V|) using adjacency list + binary heap.
+    Returns the minimum path cost from start to end, or math.inf if unreachable.
+    Requires non-negative arc costs.
     """
     if start not in nodes or end not in nodes:
         return inf
     if start == end:
         return 0.0
 
-    # Build adjacency list: O(|A|)
-    adj: Dict[int, List[Tuple[int, int]]] = {u: [] for u in nodes}
+    # adjacency list: node -> list[(neighbor, weight)]
+    adj: Dict[int, List[Tuple[int, float]]] = {u: [] for u in nodes}
     for (u, v) in arcs:
-        # if an arc is declared but missing a cost, skip (or raise)
-        if (u, v) in costs:
-            adj[u].append((v, costs[(u, v)]))
+        w = costs.get((u, v))
+        if w is None:
+            continue
+        # Optional: enforce Dijkstra precondition
+        if w < 0:
+            raise ValueError(f"Negative arc cost on ({u},{v}) = {w}; Dijkstra requires w >= 0.")
+        adj[u].append((v, float(w)))
 
     dist: Dict[int, float] = {u: inf for u in nodes}
     dist[start] = 0.0
-    pq: List[Tuple[float, int]] = [(0.0, start)]  # (distance, node)
+    pq: List[Tuple[float, int]] = [(0.0, start)]
 
     while pq:
         du, u = heapq.heappop(pq)
         if du != dist[u]:
             continue  # stale entry
-
         if u == end:
-            return du  # early exit once target is settled
+            return du  # settled target
 
         for v, w in adj.get(u, []):
             nd = du + w
@@ -208,6 +196,7 @@ def dijkstra_min_cost(
                 heapq.heappush(pq, (nd, v))
 
     return dist[end]
+
       
 
 
