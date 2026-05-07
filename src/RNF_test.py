@@ -5,10 +5,10 @@ from gurobipy import GRB
 from utils.data_parser import RoadNetworkFormulation
 
 # Create model
-model = gp.Model("customer-graph_formulation")
+model = gp.Model("road-network_formulation")
 VALID_INEQUALITY_ENABLED = True
 
-instance = RoadNetworkFormulation.parse_instance_file("C:\\Users\\simone\\source\\repos\\mathematical-optimization\\data\\200-100-2.dat")
+instance = RoadNetworkFormulation.parse_instance_file("C:\\Users\\simone\\source\\repos\\mathematical-optimization\\data\\15-50-6.dat")
 
 V = instance.V
 W = instance.W

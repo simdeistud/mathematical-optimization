@@ -5,10 +5,10 @@ from gurobipy import GRB
 from utils.data_parser import CustomerBasedFormulation
 
 # Create model
-model = gp.Model("customer-graph_formulation")
+model = gp.Model("customer-based_formulation")
 VALID_INEQUALITY_ENABLED = True
 
-instance = CustomerBasedFormulation.parse_instance_file("C:\\Users\\simone\\source\\repos\\mathematical-optimization\\data\\200-100-2.dat")
+instance = CustomerBasedFormulation.parse_instance_file("C:\\Users\\simone\\source\\repos\\mathematical-optimization\\data\\15-200-1.dat")
 
 Vp = instance.Vp
 W = instance.W
@@ -27,10 +27,10 @@ z = model.addVars([(i, j) for i in W for j in V_rank[i]], vtype=GRB.BINARY, name
 # 4k
 y = model.addVars([(j, k) for j in V_sto for k in M], vtype=GRB.BINARY, name="y")
 # 4j
-x = model.addVars([(arc[0], arc[1], k) for arc in Ap for k in M], vtype=GRB.INTEGER, lb=0, name="x")
+x = model.addVars([(j, jp, k) for j in Vp for jp in Vp for k in M], vtype=GRB.INTEGER, lb=0, name="x")
 
 q = model.addVars([(j, k) for j in V_sto for k in M], vtype=GRB.CONTINUOUS, lb=0, name="q")
-f = model.addVars([(arc[0], arc[1], k) for arc in Ap for k in M], vtype=GRB.CONTINUOUS, lb=0, name="f")
+f = model.addVars([(j, jp, k) for j in Vp for jp in Vp for k in M], vtype=GRB.CONTINUOUS, lb=0, name="f")
 
 
 # 4b
@@ -94,8 +94,8 @@ model.addConstrs(
 # 4h
 model.addConstrs(
     (
-        gp.quicksum(f[j, jp, k] for jp in V_sto)
-        - gp.quicksum(f[jp, j, k] for jp in V_sto)
+        gp.quicksum(f[j, jp, k] for jp in Vp)
+        - gp.quicksum(f[jp, j, k] for jp in Vp)
         == q[j, k]
         for j in V_sto
         for k in M
@@ -125,8 +125,9 @@ model.addConstrs(
 # 4n
 model.addConstrs(
     (
-        f[arc[0], arc[1], k] <= Q*x[arc[0], arc[1], k]
-        for arc in Ap
+        f[j, jp, k] <= Q*x[j, jp, k]
+        for j in Vp
+        for jp in Vp
         for k in M
     ),
     name="4n"
@@ -173,6 +174,10 @@ model.setObjective(
 # Optimize
 TimeLimit = 60 * 60 * 3 # 3 HOURS
 model.setParam("TimeLimit", TimeLimit)
+
+model.write("full.lp")
+model.write("full.mps")
+
 model.optimize()
 
 

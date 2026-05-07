@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import re
-import ast
+import heapq
+from math import inf
 import argparse
 from typing import Dict, Tuple, List, Set, Optional
 
@@ -43,8 +43,6 @@ class RoadNetworkFormulation:
                     while lines[c].strip() != "END":
                         node_data = lines[c].strip().split()
                         formulation.V.add(int(node_data[0]))
-                        if node_data[1] == "true":
-                            formulation.V_sto.add(int(node_data[0]))
                         c += 1
                 # PARSE ARCS
                 elif line.startswith("Arcs (A)"):
@@ -66,12 +64,24 @@ class RoadNetworkFormulation:
                             formulation.V_rank[int(node_data[0])].append(int(rank_node.strip()))
                         c += 1
                 c += 1
+        # SOME VALIDATIONS
+        for i, rank_list in formulation.V_rank.items():
+            for j in rank_list:
+                if j not in formulation.V:
+                    raise ValueError(f"Ranked node {j} for demand node {i} is not in V")
+        if formulation.sigma not in formulation.V:
+            raise ValueError(f"Depot sigma={formulation.sigma} is not in V")
+        if formulation.dtot != sum(formulation.d.values()):
+            raise ValueError(
+                f"TotalWaste={formulation.dtot}, but sum(d_i)={sum(formulation.d.values())}"
+            )
+        # COMPILE V_sto
+        for w in formulation.W:
+            formulation.V_sto.update(formulation.V_rank[w])
         # DERIVE Q AS PER SECTION 6.1 OF THE PAPER
         formulation.Q = 1.05 * (formulation.dtot / len(formulation.M))
         # SET t_sto TO 5s AS PER SECTION 3.3 A6) OF THE PAPER
-        formulation.t_sto = 5.0
-        # Parse the content of the .dat file and populate the formulation attributes
-        # This is a placeholder for the actual parsing logic, which will depend on the format of the .dat file
+        formulation.t_sto = 5
         return formulation
     
     def rank(self, i: int, j: int) -> int:
@@ -97,7 +107,7 @@ class CustomerBasedFormulation:
 
     @staticmethod
     def parse_instance_file(dat_path: str) -> CustomerBasedFormulation:
-        RN = RoadNetworkFormulation().parse_instance_file(dat_path)
+        RN = RoadNetworkFormulation.parse_instance_file(dat_path)
         formulation = CustomerBasedFormulation()
         formulation.W = RN.W
         formulation.V_sto = RN.V_sto
@@ -109,27 +119,22 @@ class CustomerBasedFormulation:
         formulation.sigma = RN.sigma
         formulation.t_sto = RN.t_sto
         # CREATE V'
-        formulation.Vp = RN.V_sto.union({RN.sigma})
-        # CREATE A'
-        for (j, jp) in zip(formulation.Vp, formulation.Vp):
-            if j == jp:
-                continue
-            shortest_path_cost = int("inf")
-            # Dijkstra's algorithm to find shortest path from j to jp in RN
-            unvisited = set(RN.V)
-            distances = {node: int("inf") for node in RN.V}
-            distances[j] = 0
-            while unvisited:
-                current = min(unvisited, key=lambda node: distances[node])
-                unvisited.remove(current)
-                for neighbor in RN.V:
-                    if (current, neighbor) in RN.A:
-                        alt = distances[current] + RN.c[(current, neighbor)]
-                        if alt < distances[neighbor]:
-                            distances[neighbor] = alt
-            shortest_path_cost = distances[jp]
-            formulation.Ap.add((j, jp))
-            formulation.c[(j, jp)] = shortest_path_cost
+        formulation.Vp = RN.V_sto.union({RN.sigma})   
+        # CREATE A' with shortest-path costs in the underlying road network
+        # (ordered pairs, excluding self-loops)
+        for j in formulation.Vp:
+            for jp in formulation.Vp:
+                sp_cost = dijkstra_min_cost(
+                        start=j,
+                        end=jp,
+                        nodes=RN.V | RN.W,
+                        arcs=RN.A,
+                        costs=RN.c,
+                    )
+                if sp_cost == inf:
+                    raise ValueError(f"No path from {j} to {jp} in the underlying road network")   
+                formulation.Ap.add((j, jp))
+                formulation.c[(j, jp)] = int(sp_cost)
         return formulation
     
     def rank(self, i: int, j: int) -> int:
@@ -138,7 +143,72 @@ class CustomerBasedFormulation:
         else:
             raise ValueError(f"Node {j} is not in the rank list of node {i}")
 
-        
+
+def dijkstra_min_cost(
+    start: int,
+    end: int,
+    nodes: Set[int],
+    arcs: Set[Tuple[int, int]],
+    costs: Dict[Tuple[int, int], int],
+) -> float:
+    """
+    Heap-based Dijkstra on a directed graph.
+
+    Parameters
+    ----------
+    start : int
+        Source node.
+    end : int
+        Target node.
+    nodes : Set[int]
+        Set of nodes (vertex set).
+    arcs : Set[Tuple[int,int]]
+        Set of directed arcs (u,v).
+    costs : Dict[Tuple[int,int], int]
+        Arc cost map (u,v) -> non-negative weight.
+
+    Returns
+    -------
+    float
+        Minimum path cost from start to end, or math.inf if unreachable.
+
+    Notes
+    -----
+    - Requires non-negative arc costs.
+    - Complexity: O(|A| log |V|) using adjacency list + binary heap.
+    """
+    if start not in nodes or end not in nodes:
+        return inf
+    if start == end:
+        return 0.0
+
+    # Build adjacency list: O(|A|)
+    adj: Dict[int, List[Tuple[int, int]]] = {u: [] for u in nodes}
+    for (u, v) in arcs:
+        # if an arc is declared but missing a cost, skip (or raise)
+        if (u, v) in costs:
+            adj[u].append((v, costs[(u, v)]))
+
+    dist: Dict[int, float] = {u: inf for u in nodes}
+    dist[start] = 0.0
+    pq: List[Tuple[float, int]] = [(0.0, start)]  # (distance, node)
+
+    while pq:
+        du, u = heapq.heappop(pq)
+        if du != dist[u]:
+            continue  # stale entry
+
+        if u == end:
+            return du  # early exit once target is settled
+
+        for v, w in adj.get(u, []):
+            nd = du + w
+            if nd < dist[v]:
+                dist[v] = nd
+                heapq.heappush(pq, (nd, v))
+
+    return dist[end]
+      
 
 
 def main():
@@ -147,19 +217,15 @@ def main():
     args = ap.parse_args()
 
     formulation = RoadNetworkFormulation.parse_instance_file(args.path)
-    print("OK")
-    print(f"|V ∪ W|={len(formulation.V | formulation.W)} |A|={len(formulation.A)} |Vsto|={len(formulation.V_sto)}")
-    print(f"sigma={formulation.sigma} gamma={formulation.t_sto} m={len(formulation.M)} Q={formulation.Q} dtot={formulation.dtot}")
-    print("V_ranks:")
-    for w in formulation.W:
-        print(f"  w{w}: {formulation.V_rank[w]}")
-    print("Costs:")
-    for arc in formulation.A:
-        print(f"  {arc}: {formulation.c[arc]}")
-    print("Demands:")
-    for w in formulation.W:
-        print(f"  w{w}: {formulation.d[w]}")
-    print("V_sto:", formulation.V_sto)
+    print("RNF OK")
+    print("|W| =", len(formulation.W))
+    print("|V| =", len(formulation.V))
+    print("|A| =", len(formulation.A))
+    print("|V_sto| =", len(formulation.V_sto))
+
+    formulation_cbf = CustomerBasedFormulation.parse_instance_file(args.path)
+    print("CBF OK")
+    
 
 if __name__ == "__main__":
     main()
