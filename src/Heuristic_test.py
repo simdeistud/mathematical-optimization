@@ -50,6 +50,12 @@ def constructSet(Vp: set[int], W: set[int], V_rank: dict[int, list[int]], V_sto:
     W_compl: dict[int, set[int]] = {j : {i for i in W if V_rank[i][0] == j} for j in V_sel}
     V_alt: dict[int, set[int]] = {j : {jp for jp in V_sto.difference({j}) if W_compl[j].issubset({ip for ip in W if jp in V_rank[ip]})} for j in V_sel}
     
+    g: dict[int, set[int]] = {j : {j}.union(V_alt[j]) for j in V_sel}
+    G_avail: set[int] = set()
+    for v in g:
+        G_avail.update(g[v])
+
+    
             
         
 
