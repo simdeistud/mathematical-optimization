@@ -52,8 +52,9 @@ def constructSet(Vp: set[int], W: set[int], V_rank: dict[int, list[int]], V_sto:
     
     g: dict[int, set[int]] = {j : {j}.union(V_alt[j]) for j in V_sel}
     G_avail: set[int] = set()
-    for v in g:
-        G_avail.update(g[v])
+    for j in g:
+        if j in V_sel:
+            G_avail.update(g[j])
 
     
             
