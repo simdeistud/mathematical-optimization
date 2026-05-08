@@ -1,4 +1,5 @@
 from utils.data_parser import CustomerBasedFormulation
+from typing import Dict, Tuple
 
 instance = CustomerBasedFormulation.parse_instance_file("C:\\Users\\simone\\source\\repos\\mathematical-optimization\\data\\15-50-1.dat")
 
@@ -23,7 +24,7 @@ def is_set_cover(V_sel: set[int]) -> bool:
                 cover_candidate.add(i)
     return cover_candidate.issuperset(W)
 
-def constructSet(Vp: set[int], W: set[int], V_rank: dict[int, list[int]], V_sto: set[int], sigma: float, Ap: dict[int, list[int]], c: dict[int, float]) -> tuple[set[int], float]:
+def constructSet(Vp: set[int], W: set[int], V_rank: dict[int, list[int]], V_sto: set[int], sigma: int, Ap: set[tuple[int, int]], c: dict[tuple[int, int], float]) -> tuple[set[int], float]:
     V_sel: set[int] = set()
     W_cov: set[int] = set()
 
@@ -55,6 +56,11 @@ def constructSet(Vp: set[int], W: set[int], V_rank: dict[int, list[int]], V_sto:
     for j in g:
         if j in V_sel:
             G_avail.update(g[j])
+
+    j = V_sel.pop()
+    V_sel.add(j)
+    giantTour = (sigma, j, sigma)
+    giantTour_c = c[(sigma, j)] + c[(j, sigma)]
 
     
             
