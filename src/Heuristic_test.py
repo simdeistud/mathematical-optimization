@@ -47,10 +47,10 @@ def constructSet(Vp: set[int], W: set[int], V_rank: dict[int, list[int]], V_sto:
         if is_set_cover(V_sel.difference({j})):
             V_sel.remove(j)  # Remove redundant nodes
     
-    W_neg: dict[int, set[int]] = {}
-    V_alt: dict[int, set[int]] = {}
-    for j in V_sel:
-        
+    W_compl: dict[int, set[int]] = {j : {i for i in W if V_rank[i][0] == j} for j in V_sel}
+    V_alt: dict[int, set[int]] = {j : {jp for jp in V_sto.difference({j}) if W_compl[j].issubset({ip for ip in W if jp in V_rank[ip]})} for j in V_sel}
+    
+            
         
 
 
