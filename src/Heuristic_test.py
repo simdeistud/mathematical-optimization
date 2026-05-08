@@ -14,8 +14,18 @@ Q = instance.Q
 sigma = instance.sigma
 t_sto = instance.t_sto
 
-def is_a_cover_of(s1: set[int], s2: set[int]) -> bool:
-    return s1.issuperset(s2)
+def is_set_cover(V_sel: set[int]) -> bool:
+    cover_candidate: set[int] = set()
+    # For each node in V_sel, add the corresponding nodes in W whose demand it satisfies
+    for j in V_sel:
+        for i in W:
+            if j in V_rank[i]:
+                cover_candidate.add(i)
+    return cover_candidate.issuperset(W)
 
 def constructSet(Vp: set[int], W: set[int], V_rank: dict[int, list[int]], V_sto: set[int], sigma: float, Ap: dict[int, list[int]], c: dict[int, float]) -> tuple[set[int], float]:
-    
+    V_sel: set[int] = set()
+    W_cov: set[int] = set()
+
+    while not is_set_cover(V_sel):
+
