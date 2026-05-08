@@ -28,4 +28,30 @@ def constructSet(Vp: set[int], W: set[int], V_rank: dict[int, list[int]], V_sto:
     W_cov: set[int] = set()
 
     while not is_set_cover(V_sel):
+        i = W.difference(W_cov).pop()  # Get an uncovered node
+        j_star = -1
+        W_j_star: set[int] = set()
+        most_candidates_n = -1
+        for j in V_rank[i]:
+            W_j = {ip for ip in W if j in V_rank[ip]}  # Nodes in W that j can cover
+            candidates_n = len(W_cov.union(W_j))
+            if candidates_n > most_candidates_n:
+                most_candidates_n = candidates_n
+                j_star = j
+                W_j_star = W_j
+        # Add the best candidate to the solution and update covered nodes
+        V_sel.add(j_star)
+        W_cov.update(W_j_star)  # Update covered nodes
+    
+    for j in V_sel:
+        if is_set_cover(V_sel.difference({j})):
+            V_sel.remove(j)  # Remove redundant nodes
+    
+    W_neg: dict[int, set[int]] = {}
+    V_alt: dict[int, set[int]] = {}
+    for j in V_sel:
+        
+        
+
+
 
