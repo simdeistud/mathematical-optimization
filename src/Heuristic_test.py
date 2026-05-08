@@ -1,5 +1,7 @@
 from utils.data_parser import CustomerBasedFormulation
 from typing import Dict, Tuple
+import random
+import math
 
 instance = CustomerBasedFormulation.parse_instance_file("C:\\Users\\simone\\source\\repos\\mathematical-optimization\\data\\15-50-1.dat")
 
@@ -52,15 +54,71 @@ def constructSet(Vp: set[int], W: set[int], V_rank: dict[int, list[int]], V_sto:
     V_alt: dict[int, set[int]] = {j : {jp for jp in V_sto.difference({j}) if W_compl[j].issubset({ip for ip in W if jp in V_rank[ip]})} for j in V_sel}
     
     g: dict[int, set[int]] = {j : {j}.union(V_alt[j]) for j in V_sel}
-    G_avail: set[int] = set()
-    for j in g:
-        if j in V_sel:
-            G_avail.update(g[j])
+    G_avail: set[set[int]] = set()
+    for j in V_sel:
+        G_avail.add(g[j])
 
     j = V_sel.pop()
     V_sel.add(j)
-    giantTour = (sigma, j, sigma)
+    giantTour = [sigma, j, sigma]
     giantTour_c = c[(sigma, j)] + c[(j, sigma)]
+    for group in G_avail.copy():
+        if j in group:
+            G_avail.remove(group)
+    while len(G_avail) > 0:
+        position = random.choice(["before", "after"])
+        
+        if position == "before":
+            j = giantTour[1]
+            s: dict[tuple[int, int], float] = {}
+            l: dict[set[int], float] = {}
+            for group in G_avail:
+                shortest: float = -1
+                for z in group:
+                    current: float = c[(sigma, z)] + c[(z, sigma)]
+                    if current < current:
+                        shortest = current
+                        l[group] = shortest
+                for jp in group:
+                    s[(jp, j)] = - l[group] - c[(sigma, j)] + c[(sigma, jp)] + c[(jp, j)]
+            j_star = -1
+            cost = math.inf
+            for arc in s:
+                if s[arc] < cost:
+                    cost = s[arc]
+                    j_star = arc[0]
+            giantTour.insert(giantTour.index(j), j_star)
+            giantTour_c += s[j_star, j]
+            for group in G_avail.copy():
+                if j_star in group:
+                    G_avail.remove(group)
+
+        if position == "after":
+            j = giantTour[-2]
+            s: dict[tuple[int, int], float] = {}
+            l: dict[set[int], float] = {}
+            for group in G_avail:
+                shortest: float = -1
+                for z in group:
+                    current: float = c[(sigma, z)] + c[(z, sigma)]
+                    if current < current:
+                        shortest = current
+                        l[group] = shortest
+                for jp in group:
+                    s[(j, jp)] = - l[group] - c[(j, sigma)] + c[(j, jp)] + c[(jp, sigma)]
+            j_star = -1
+            cost = math.inf
+            for arc in s:
+                if s[arc] < cost:
+                    cost = s[arc]
+                    j_star = arc[1]
+            giantTour.insert(giantTour.index(j) + 1, j_star)
+            giantTour_c += s[j, j_star]
+            for group in G_avail.copy():
+                if j_star in group:
+                    G_avail.remove(group)
+    cost_V_sel = giantTour_c
+    return V_sel, cost_V_sel
 
     
             
