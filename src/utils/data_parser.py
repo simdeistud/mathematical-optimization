@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import heapq
-from math import inf
+import math
 import random
 import argparse
 from typing import Dict, Tuple, List, Set, Optional
@@ -17,7 +17,7 @@ class RoadNetworkFormulation:
         self.M: Set[int] = set()
         self.d: Dict[int, int] = {}
         self.dtot: int = 0
-        self.Q: float = 0.0
+        self.Q: int = 0
         self.sigma: int = 0
         self.t_sto: float = 0
     
@@ -33,7 +33,7 @@ class RoadNetworkFormulation:
                 if line.startswith("NumberOfTours"):
                     formulation.M = set(range(1, int(line.split(":")[-1].strip()) + 1))
                 elif line.startswith("VehicleCapacity"):
-                    formulation.Q = float(line.split(":")[-1].strip())
+                    formulation.Q = int(line.split(":")[-1].strip())
                 elif line.startswith("TotalWaste"):
                     formulation.dtot = int(line.split(":")[-1].strip())
                 elif line.startswith("WasteDepot"):
@@ -58,9 +58,9 @@ class RoadNetworkFormulation:
                         formulation.A.add(arc)
                         # THE PAPER ASSUMES 14m/s FOR ARCS CONNECTING THE DEPOT AND 2m/s FOR ALL OTHER ARCS, AS PER SECTION 6.1
                         if arc[0] == formulation.sigma or arc[1] == formulation.sigma:
-                            formulation.c[arc] = length / 14 
+                            formulation.c[arc] = length / 14.0
                         else:
-                            formulation.c[arc] = length / 2
+                            formulation.c[arc] = length / 2.0
                         c += 1
                 # PARSE W NODES
                 elif line.startswith("DemandNodes (W)"):
@@ -86,7 +86,7 @@ class RoadNetworkFormulation:
                 f"TotalWaste={formulation.dtot}, but sum(d_i)={sum(formulation.d.values())}"
             )
         # DERIVE Q AS PER SECTION 6.1 OF THE PAPER
-        formulation.Q = 1.05 * (formulation.dtot / len(formulation.M))
+        formulation.Q = math.ceil(1.05 * (formulation.dtot / len(formulation.M)))
         # SET t_sto TO 5s AS PER SECTION 3.3 A6) OF THE PAPER
         formulation.t_sto = 5
         return formulation
