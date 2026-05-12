@@ -1,4 +1,5 @@
 import networkx as nx
+import matplotlib.pyplot as plt
 
 def extract_eulerian_tours(x, A, M, sigma):
     """
@@ -50,16 +51,18 @@ def edges_to_nodes(circuit, sigma):
 
     return path
 
-import matplotlib.pyplot as plt
-
 def plot_tour(x, A, k, sigma):
     G = nx.MultiDiGraph()
-
+    print(f"Plotting tour {k}")
     # build graph
     for (i, j) in A:
         val = x[i, j, k].X
         for _ in range(int(val)):
             G.add_edge(i, j)
+
+    if not nx.is_eulerian(G):
+        print("NOT Eulerian")
+        #return        
 
     pos = nx.spring_layout(G)
 
@@ -80,3 +83,77 @@ def plot_tour(x, A, k, sigma):
 
     plt.title(f"Tour {k} (start = {sigma})")
     plt.show()
+
+def plot_tour_with_order(x, A, k, sigma, coords):
+    G = nx.MultiDiGraph()
+
+    for (i, j) in A:
+        val = x[i, j, k].X
+        for _ in range(int(val)):
+            G.add_edge(i, j)
+
+    pos = coords
+    plt.figure()
+
+    # draw nodes
+    nx.draw_networkx(G, pos,
+        node_color="lightblue",
+        node_size=600,
+        with_labels=True,
+        arrows=False
+    )
+
+    circuit = list(nx.eulerian_circuit(G, source=sigma))
+
+    # draw ordered traversal
+    for idx, (i, j) in enumerate(circuit):
+        x1, y1 = pos[i]
+        x2, y2 = pos[j]
+
+        plt.annotate(
+            "",
+            xy=(x2, y2),
+            xytext=(x1, y1),
+            arrowprops=dict(
+                arrowstyle="->",
+                color="red",
+                lw=2
+            )
+        )
+
+        # label step
+        mx, my = (x1 + x2) / 2, (y1 + y2) / 2
+        plt.text(mx, my, str(idx), color="black", fontsize=8)
+
+    plt.scatter(*pos[sigma], color="orange", s=200)
+
+    plt.axis("equal")
+    plt.title(f"Tour {k} with order")
+    plt.show()
+
+def main():
+    A = {(1,2), (1,3), (3,1), (2,1), (2,3)}
+    x = {
+        (1,3,1) : 1,
+        (3,1,1) : 1,
+        (1,2,1) : 1,
+        (2,1,1) : 1,
+        (2,3,1) : 0
+    }
+    sigma = 1
+    M = {1}
+    tours = extract_eulerian_tours(x, A, M, sigma)
+    for k, circuit in tours.items():
+        nodes = edges_to_nodes(circuit, sigma)
+
+        print(f"Tour {k}:")
+        print("Edges:", circuit)
+        print("Nodes:", nodes)
+
+        plot_tour(x, A, k, sigma)
+    
+
+    
+
+if __name__ == "__main__":
+    main()

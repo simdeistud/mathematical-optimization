@@ -9,7 +9,7 @@ import utils.circuits
 model = gp.Model("road-network_formulation")
 VALID_INEQUALITY_ENABLED = True
 
-instance = RoadNetworkFormulation.parse_instance_file("C:\\Users\\simone\\source\\repos\\mathematical-optimization\\data\\15-100-2.dat")
+instance = RoadNetworkFormulation.parse_instance_file("C:\\Users\\simone\\source\\repos\\mathematical-optimization\\data\\15-0-6.dat")
 
 M = instance.M
 d = instance.d
@@ -210,4 +210,4 @@ for k, circuit in tours.items():
     print("Edges:", circuit)
     print("Nodes:", nodes)
 
-    utils.circuits.plot_tour(x, A, k, sigma)
+    utils.circuits.plot_tour_with_order(x, A, k, sigma, instance.coords)

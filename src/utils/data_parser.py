@@ -9,6 +9,7 @@ from typing import Dict, Tuple, List, Set, Optional
 class RoadNetworkFormulation:
     def __init__(self) -> None:
         self.V: Set[int] = set()
+        self.coords: dict[int, tuple[int, int]] = {}
         self.W: Set[int] = set()
         self.A: set[Tuple[int, int]] = set()
         self.c: Dict[Tuple[int, int], float] = {} # The cost is not the length of the arc, but its travel time in seconds
@@ -43,10 +44,14 @@ class RoadNetworkFormulation:
                     c += 3 # SKIP USELESS METADATA
                     while lines[c].strip() != "END":
                         node_data = lines[c].strip().split()
-                        formulation.V.add(int(node_data[0]))
+                        node = int(node_data[0])
+                        xcoord = int(node_data[2])
+                        ycoord = int(node_data[3])
+                        formulation.V.add(node)
+                        formulation.coords[node] = (xcoord, ycoord)
                         # ADD TO V_sto IF IsCandidateLocation IS "true"
                         if node_data[1] == "true":
-                            formulation.V_sto.add(int(node_data[0]))
+                            formulation.V_sto.add(node)
                         c += 1
                 # PARSE ARCS
                 elif line.startswith("Arcs (A)"):
