@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import heapq
 from math import inf
+import random
 import argparse
 from typing import Dict, Tuple, List, Set, Optional
 
@@ -10,7 +11,7 @@ class RoadNetworkFormulation:
         self.V: Set[int] = set()
         self.W: Set[int] = set()
         self.A: set[Tuple[int, int]] = set()
-        self.c: Dict[Tuple[int, int], float] = {}
+        self.c: Dict[Tuple[int, int], float] = {} # The cost is not the length of the arc, but its travel time in seconds
         self.V_sto: Set[int] = set()
         self.V_rank: Dict[int, List[int]] = {}
         self.M: Set[int] = set()
@@ -43,18 +44,23 @@ class RoadNetworkFormulation:
                     while lines[c].strip() != "END":
                         node_data = lines[c].strip().split()
                         formulation.V.add(int(node_data[0]))
+                        # ADD TO V_sto IF IsCandidateLocation IS "true"
+                        if node_data[1] == "true":
+                            formulation.V_sto.add(int(node_data[0]))
                         c += 1
                 # PARSE ARCS
                 elif line.startswith("Arcs (A)"):
                     c += 3 # SKIP USELESS METADATA
                     while lines[c].strip() != "END":
                         arc_data = lines[c].strip().split()
-                        formulation.A.add((int(arc_data[0]), int(arc_data[1])))
+                        arc = (int(arc_data[0]), int(arc_data[1]))
+                        length = int(arc_data[2])
+                        formulation.A.add(arc)
                         # THE PAPER ASSUMES 14m/s FOR ARCS CONNECTING THE DEPOT AND 2m/s FOR ALL OTHER ARCS, AS PER SECTION 6.1
-                        if int(arc_data[0]) == formulation.sigma or int(arc_data[1]) == formulation.sigma:
-                            formulation.c[(int(arc_data[0]), int(arc_data[1]))] = int(arc_data[2]) / 14
+                        if arc[0] == formulation.sigma or arc[1] == formulation.sigma:
+                            formulation.c[arc] = length / 14 
                         else:
-                            formulation.c[(int(arc_data[0]), int(arc_data[1]))] = int(arc_data[2]) / 2
+                            formulation.c[arc] = length / 2
                         c += 1
                 # PARSE W NODES
                 elif line.startswith("DemandNodes (W)"):
@@ -79,9 +85,6 @@ class RoadNetworkFormulation:
             raise ValueError(
                 f"TotalWaste={formulation.dtot}, but sum(d_i)={sum(formulation.d.values())}"
             )
-        # COMPILE V_sto
-        for w in formulation.W:
-            formulation.V_sto.update(formulation.V_rank[w])
         # DERIVE Q AS PER SECTION 6.1 OF THE PAPER
         formulation.Q = 1.05 * (formulation.dtot / len(formulation.M))
         # SET t_sto TO 5s AS PER SECTION 3.3 A6) OF THE PAPER
@@ -89,10 +92,7 @@ class RoadNetworkFormulation:
         return formulation
     
     def rank(self, i: int, j: int) -> int:
-        if j in self.V_rank[i]:
-            return self.V_rank[i].index(j)
-        else:
-            raise ValueError(f"Node {j} is not in the rank list of node {i}")
+        return self.V_rank[i].index(j)
 
 class CustomerBasedFormulation:
     def __init__(self) -> None:
@@ -208,6 +208,8 @@ def main():
     formulation = RoadNetworkFormulation.parse_instance_file(args.path)
     print("RNF OK")
     print("|W| =", len(formulation.W))
+    sampleWnode = random.choice(list(formulation.W))
+    print(f"W nodes keep an ordered list: W_{sampleWnode}'s favorites are: {formulation.V_rank[sampleWnode]} and produces {formulation.d[sampleWnode]} units of waste")
     print("|V| =", len(formulation.V))
     print("|A| =", len(formulation.A))
     print("|V_sto| =", len(formulation.V_sto))
