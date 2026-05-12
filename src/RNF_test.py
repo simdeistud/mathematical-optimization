@@ -3,12 +3,13 @@ import math
 import gurobipy as gp
 from gurobipy import GRB
 from utils.data_parser import RoadNetworkFormulation
+import utils.circuits
 
 # Create model
 model = gp.Model("road-network_formulation")
 VALID_INEQUALITY_ENABLED = True
 
-instance = RoadNetworkFormulation.parse_instance_file("C:\\Users\\simone\\source\\repos\\mathematical-optimization\\data\\15-50-1.dat")
+instance = RoadNetworkFormulation.parse_instance_file("C:\\Users\\simone\\source\\repos\\mathematical-optimization\\data\\15-100-2.dat")
 
 M = instance.M
 d = instance.d
@@ -18,8 +19,6 @@ t_sto = instance.t_sto
 V = instance.V
 W = instance.W
 A = instance.A
-# I BELIEVE THE COST FUNCTION SHOULD BE THE TRAVEL TIME, WHICH IS THE DISTANCE DIVIDED BY THE SPEED.
-# THE PAPER ASSUMES 14m/s FOR ARCS CONNECTING THE DEPOT AND 2m/s FOR ALL OTHER ARCS, AS PER SECTION 6.1 OF THE PAPER
 c = instance.c
 V_rank = instance.V_rank
 V_sto = instance.V_sto
@@ -92,7 +91,7 @@ model.addConstrs(
         for h in V
         for k in M
     ),
-    name="1f"
+    name="1g"
 )
 # 1h
 model.addConstrs(
@@ -200,3 +199,15 @@ if model.status == GRB.OPTIMAL:
     print(f"Optimal objective value: {model.objVal}")
 else:
     print("No optimal solution found.")
+
+
+tours = utils.circuits.extract_eulerian_tours(x, A, M, sigma)
+
+for k, circuit in tours.items():
+    nodes = utils.circuits.edges_to_nodes(circuit, sigma)
+
+    print(f"Tour {k}:")
+    print("Edges:", circuit)
+    print("Nodes:", nodes)
+
+    utils.circuits.plot_tour(x, A, k, sigma)
