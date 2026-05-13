@@ -141,7 +141,7 @@ class CustomerBasedFormulation:
                         arcs=RN.A,
                         costs=RN.c,
                     )
-                if time == inf:
+                if time == math.inf:
                     raise ValueError(f"No path from {j} to {jp} in the underlying road network")   
                 formulation.c[(j, jp)] = time
         return formulation
@@ -168,7 +168,7 @@ def dijkstra_min_cost(
     Requires non-negative arc costs.
     """
     if start not in nodes or end not in nodes:
-        return inf
+        return math.inf
     if start == end:
         return 0.0
 
@@ -183,7 +183,7 @@ def dijkstra_min_cost(
             raise ValueError(f"Negative arc cost on ({u},{v}) = {w}; Dijkstra requires w >= 0.")
         adj[u].append((v, float(w)))
 
-    dist: Dict[int, float] = {u: inf for u in nodes}
+    dist: Dict[int, float] = {u: math.inf for u in nodes}
     dist[start] = 0.0
     pq: List[Tuple[float, int]] = [(0.0, start)]
 
@@ -215,6 +215,9 @@ def main():
     print("|W| =", len(formulation.W))
     sampleWnode = random.choice(list(formulation.W))
     print(f"W nodes keep an ordered list: W_{sampleWnode}'s favorites are: {formulation.V_rank[sampleWnode]} and produces {formulation.d[sampleWnode]} units of waste")
+    n, m = random.choices(formulation.V_rank[sampleWnode], k=2)
+    favorite = n if formulation.rank(sampleWnode, n) < formulation.rank(sampleWnode, m) else m
+    print(f"Citizens at W_{sampleWnode} between V_{n} (position {formulation.rank(sampleWnode, n)}) and V_{m} (position {formulation.rank(sampleWnode, m)}) prefer V_{favorite}")
     print("|V| =", len(formulation.V))
     print("|A| =", len(formulation.A))
     print("|V_sto| =", len(formulation.V_sto))
