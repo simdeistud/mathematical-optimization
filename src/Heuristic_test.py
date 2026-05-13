@@ -1,6 +1,7 @@
 from utils.data_parser import CustomerBasedFormulation
 from typing import Dict, Tuple
 import random
+import time
 import math
 
 instance = CustomerBasedFormulation.parse_instance_file("C:\\Users\\simone\\source\\repos\\mathematical-optimization\\data\\15-50-1.dat")
@@ -119,6 +120,38 @@ def constructSet(Vp: set[int], W: set[int], V_rank: dict[int, list[int]], V_sto:
                     G_avail.remove(group)
     cost_V_sel = giantTour_c
     return V_sel, cost_V_sel
+
+best_set_covers: dict[set[int], float] = {}
+treated_set_covers: dict[set[int], float] = {}
+consecutive_without_improvement = 0
+elapsed_time = 0
+TIME_LIMIT: int = 10800
+bestSol: tuple[set[int], float]
+while elapsed_time < TIME_LIMIT and consecutive_without_improvement < 100:
+    iteration_start_time = time.time()
+    # PHASE 1
+    V_sel, V_sel_cost = constructSet(Vp, W, V_rank, V_sto, sigma, Ap, c)
+    if V_sel in treated_set_covers:
+        treated_set_covers[V_sel] # penalized (how???)
+    else:
+        if V_sel_cost < max(best_set_covers, key=best_set_covers.get):
+            best_set_covers[V_sel] = V_sel_cost
+    # PHASE 2
+    V_sel: set[int] = min(best_set_covers, key=best_set_covers.get)
+    V_sel_cost = best_set_covers.pop(V_sel)
+    treated_set_covers[V_sel] = V_sel_cost
+    # TransformSDVRPassociatedwith𝑉sel intoaCVRP
+    CVRP: set[int] = set()
+    # Findsolutionof theCVRPwithHGS-CVRP:CVRPSol
+    SDVRPSol: set[int] = set()
+    SDVRPSol_cost: float = 0
+    # TransformCVRPSol intoaSDVRPsolution:SDVRPSol
+    if SDVRPSol_cost < bestSol[1]:
+        bestSol = (SDVRPSol, SDVRPSol_cost)
+    iteration_end_time = time.time()
+    elapsed_time += iteration_end_time - iteration_start_time
+
+        
 
     
             
