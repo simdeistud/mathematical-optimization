@@ -121,6 +121,134 @@ def constructSet(Vp: set[int], W: set[int], V_rank: dict[int, list[int]], V_sto:
     cost_V_sel = giantTour_c
     return V_sel, cost_V_sel
 
+def constructSet_LLM(Vp, W, V_rank, V_sto, sigma, Ap, c):
+    # Precompute W_j = demand nodes coverable by stop j
+    W_by_stop = {
+        j: {i for i in W if j in V_rank[i]}
+        for j in V_sto
+    }
+
+    def is_set_cover_local(V_sel):
+        covered = set()
+        for j in V_sel:
+            covered |= W_by_stop[j]
+        return covered >= W
+
+    V_sel = set()
+    W_cov = set()
+
+    # 1) Build initial set cover
+    while not is_set_cover_local(V_sel):
+        i = random.choice(list(W - W_cov))
+
+        j_star = max(
+            V_rank[i],
+            key=lambda j: len(W_cov | W_by_stop[j])
+        )
+
+        V_sel.add(j_star)
+        W_cov |= W_by_stop[j_star]
+
+    # 2) Remove redundant nodes
+    for j in list(V_sel):
+        if is_set_cover_local(V_sel - {j}):
+            V_sel.remove(j)
+
+    # 3) Compute demand assigned to each selected stop:
+    #    j is selected if it is the best-ranked node among V_sel
+    W_assigned = {j: set() for j in V_sel}
+
+    for i in W:
+        best_j = min(
+            (j for j in V_sel if j in V_rank[i]),
+            key=lambda j: V_rank[i].index(j)
+        )
+        W_assigned[best_j].add(i)
+
+    # 4) Alternatives
+    V_alt = {
+        j: {
+            jp for jp in V_sto - {j}
+            if W_assigned[j] <= W_by_stop[jp]
+        }
+        for j in V_sel
+    }
+
+    groups = {
+        j: {j} | V_alt[j]
+        for j in V_sel
+    }
+
+    G_avail = list(groups.values())
+
+    # 5) Start giant tour
+    start = random.choice(list(V_sel))
+    giantTour = [sigma, start, sigma]
+    giantTour_c = c[(sigma, start)] + c[(start, sigma)]
+
+    G_avail = [group for group in G_avail if start not in group]
+
+    # Helper: l_g = min_z in group c[sigma,z] + c[z,sigma]
+    def ell_group(group):
+        return min(c[(sigma, z)] + c[(z, sigma)] for z in group)
+
+    # 6) Insert one node per remaining group
+    while G_avail:
+        position = random.choice(["before", "after"])
+
+        best_node = None
+        best_delta = math.inf
+
+        if position == "before":
+            first = giantTour[1]
+
+            for group in G_avail:
+                ell_g = ell_group(group)
+
+                for jp in group:
+                    delta = (
+                        -ell_g
+                        - c[(sigma, first)]
+                        + c[(sigma, jp)]
+                        + c[(jp, first)]
+                    )
+
+                    if delta < best_delta:
+                        best_delta = delta
+                        best_node = jp
+
+            giantTour.insert(1, best_node)
+
+        else:
+            last = giantTour[-2]
+
+            for group in G_avail:
+                ell_g = ell_group(group)
+
+                for jp in group:
+                    delta = (
+                        -ell_g
+                        - c[(last, sigma)]
+                        + c[(last, jp)]
+                        + c[(jp, sigma)]
+                    )
+
+                    if delta < best_delta:
+                        best_delta = delta
+                        best_node = jp
+
+            giantTour.insert(len(giantTour) - 1, best_node)
+
+        giantTour_c += best_delta
+
+        # Remove all groups containing inserted node
+        G_avail = [group for group in G_avail if best_node not in group]
+
+    # Paper redefines V_sel as the nodes visited in the giant tour
+    V_sel_final = set(giantTour[1:-1])
+
+    return V_sel_final, giantTour_c
+
 best_set_covers: dict[set[int], float] = {}
 treated_set_covers: dict[set[int], float] = {}
 consecutive_without_improvement = 0
