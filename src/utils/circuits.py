@@ -1,7 +1,7 @@
 import networkx as nx
 import matplotlib.pyplot as plt
 
-def extract_eulerian_tours(x, A, M, sigma):
+def extract_eulerian_tours(x, A, M, sigma, tol=1e-5):
     """
     Extract Eulerian tours starting from node sigma.
 
@@ -23,7 +23,15 @@ def extract_eulerian_tours(x, A, M, sigma):
         # build multigraph
         for (i, j) in A:
             val = x[i, j, k].X
-            for _ in range(int(val)):
+            
+            # Robust integer recovery
+            n = int(round(val))
+
+            # Optional sanity check
+            if abs(val - n) > tol:
+                print(f"Warning: x[{i},{j},{k}] = {val}, rounded to {n}")
+
+            for _ in range(n):
                 G.add_edge(i, j)
 
         if G.number_of_edges() == 0:
@@ -51,13 +59,19 @@ def edges_to_nodes(circuit, sigma):
 
     return path
 
-def plot_tour(x, A, k, sigma):
+def plot_tour(x, A, k, sigma, tol=1e-5):
     G = nx.MultiDiGraph()
     print(f"Plotting tour {k}")
     # build graph
     for (i, j) in A:
         val = x[i, j, k].X
-        for _ in range(int(val)):
+        # Robust integer recovery
+        n = int(round(val))
+
+        # Optional sanity check
+        if abs(val - n) > tol:
+           print(f"Warning: x[{i},{j},{k}] = {val}, rounded to {n}")
+        for _ in range(n):
             G.add_edge(i, j)
 
     if not nx.is_eulerian(G):
@@ -84,12 +98,19 @@ def plot_tour(x, A, k, sigma):
     plt.title(f"Tour {k} (start = {sigma})")
     plt.show()
 
-def plot_tour_with_order(x, A, k, sigma, coords):
+def plot_tour_with_order(x, A, k, sigma, coords, tol=1e-5):
     G = nx.MultiDiGraph()
 
     for (i, j) in A:
         val = x[i, j, k].X
-        for _ in range(int(val)):
+        # Robust integer recovery
+        n = int(round(val))
+
+        # Optional sanity check
+        if abs(val - n) > tol:
+            print(f"Warning: x[{i},{j},{k}] = {val}, rounded to {n}")
+
+        for _ in range(n):
             G.add_edge(i, j)
 
     pos = coords
