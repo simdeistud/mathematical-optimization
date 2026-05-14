@@ -3,6 +3,117 @@ from typing import Dict, Tuple
 import random
 import time
 import math
+import hygese as hgs
+import numpy as np 
+
+class SDVRPFormulation:
+    def __init__(self):
+        self.V: set[int] = set()
+        self.A: set[tuple[int, int]] = set()
+        self.costs: dict[tuple[int, int], float] = {}
+        self.depot: int = 0
+        self.tours: set[int] = set()
+        self.demands: dict[int, int] = {}
+        self.capacity: float = 0
+        self.t_sto: float = 0
+    
+    @staticmethod
+    def from_CustomerBasedFormulation(formulation: CustomerBasedFormulation, V_sel: set[int]) -> SDVRPFormulation:
+        result: SDVRPFormulation = SDVRPFormulation()
+        result.V = V_sel
+        result.A = {arc for arc in formulation.Ap if arc[0] in result.V and arc[1] in result.V}
+        result.costs = {arc : formulation.c[arc] for arc in result.A}
+        result.depot = formulation.sigma
+        result.tours = formulation.M
+        result.capacity = formulation.Q
+        result.t_sto = formulation.t_sto
+        assigned_collections: dict[int, int] = {}
+        for w in formulation.W:
+            favorite_collection: int
+            for v in formulation.V_rank[w]:
+                if v in V_sel:
+                    favorite_collection = v
+                    break
+            assigned_collections[w] = favorite_collection
+        aggregated_demands: dict[int, int] = {}
+        for assignment in assigned_collections:
+            if aggregated_demands.get(assigned_collections[assignment]) is None:
+                aggregated_demands[assigned_collections[assignment]] = formulation.d[assignment]
+            else:
+                aggregated_demands[assigned_collections[assignment]] += formulation.d[assignment]
+        result.demands = aggregated_demands
+        return result
+
+class CVRPFormulation:
+    def __init__(self):
+        self.V: set[int] = set()
+        self.A: set[tuple[int, int]] = set()
+        self.costs: dict[tuple[int, int], float] = {}
+        self.depot: int = 0
+        self.tours: set[int] = set()
+        self.demands: Dict[int, int] = {}
+        self.capacity: float = 0
+        self.t_sto: float = 0
+    
+    
+    @staticmethod
+    def split_demand(demand: int, capacity: float) -> dict[int, int]:
+        """
+        Split a demand according to the 20/10/5/1 rule.
+
+        Returns:
+            {
+                20: number of pieces of size 0.20 * capacity,
+                10: number of pieces of size 0.10 * capacity,
+                 5: number of pieces of size 0.05 * capacity,
+                 1: number of pieces of size 0.01 * capacity,
+            }
+
+        Note:
+            Any residual demand smaller than 0.01 * capacity is NOT represented
+            by this return type. You need to handle it separately when creating
+            actual CVRP pseudo-customers.
+        """
+        if demand < 0:
+            raise ValueError("Demand must be non-negative.")
+        if capacity <= 0:
+            raise ValueError("Capacity must be positive.")
+
+        remaining = float(demand)
+        eps = 1e-9
+
+        split: dict[int, int] = {}
+
+        for pct in (20, 10, 5, 1):
+            piece_size = (pct / 100.0) * capacity
+            n_pieces = int(math.floor((remaining + eps) / piece_size))
+
+            split[pct] = n_pieces
+            remaining -= n_pieces * piece_size
+
+            # Avoid tiny negative residuals due to floating point noise
+            if abs(remaining) < eps:
+                remaining = 0.0
+
+        return split
+
+    @staticmethod
+    def from_SDVRPFormulation(formulation: SDVRPFormulation) -> CVRPFormulation:
+        result: CVRPFormulation = CVRPFormulation()
+        result.depot = formulation.depot
+        result.tours = formulation.tours
+        result.capacity = formulation.capacity
+        result.t_sto = formulation.t_sto
+        for v in formulation.V:
+            if formulation.demands[v] > 0.1 * formulation.capacity:
+            else:
+                result.V.add(v)
+                [result.A.add(arc) for arc in formulation.A if arc[0] == v or arc[1] == v]
+                result.demands[v] = formulation.demands[v]
+                [result.costs[arc] = formulation.costs[arc] for arc in formulation.A if arc[0] == v or arc[1] == v]
+        return result
+
+
 
 instance = CustomerBasedFormulation.parse_instance_file("C:\\Users\\simone\\source\\repos\\mathematical-optimization\\data\\15-50-1.dat")
 
@@ -249,6 +360,59 @@ def constructSet_LLM(Vp, W, V_rank, V_sto, sigma, Ap, c):
 
     return V_sel_final, giantTour_c
 
+def SDVRPtoCVRP(formulation: CustomerBasedFormulation, V_sel: set[int]):
+    formulation.Vp = V_sel.union({sigma})
+    formulation.Ap = {arc for arc in formulation.Ap if arc[0] in formulation.Vp and arc[1] in formulation.Vp}
+    formulation.c = {arc : formulation.c[arc] for arc in formulation.Ap}
+
+def arcs_to_distance_matrix(nodes: set[int], costs: dict[tuple[int, int], float]) -> list[list[float]]:
+    matrix: list[list[float]] = []
+    for node in nodes:
+
+    return matrix
+
+
+def solve_CVRP(formulation: CustomerBasedFormulation) -> hgs.RoutingSolution:
+    data = dict()
+    data['distance_matrix'] = arcs_to_distance_matrix(formulation.Vp, formulation.c)
+    [
+        [0, 548, 776, 696, 582, 274, 502, 194, 308, 194, 536, 502, 388, 354, 468, 776, 662],
+        [548, 0, 684, 308, 194, 502, 730, 354, 696, 742, 1084, 594, 480, 674, 1016, 868, 1210],
+        [776, 684, 0, 992, 878, 502, 274, 810, 468, 742, 400, 1278, 1164, 1130, 788, 1552, 754],
+        [696, 308, 992, 0, 114, 650, 878, 502, 844, 890, 1232, 514, 628, 822, 1164, 560, 1358],
+        [582, 194, 878, 114, 0, 536, 764, 388, 730, 776, 1118, 400, 514, 708, 1050, 674, 1244],
+        [274, 502, 502, 650, 536, 0, 228, 308, 194, 240, 582, 776, 662, 628, 514, 1050, 708],
+        [502, 730, 274, 878, 764, 228, 0, 536, 194, 468, 354, 1004, 890, 856, 514, 1278, 480],
+        [194, 354, 810, 502, 388, 308, 536, 0, 342, 388, 730, 468, 354, 320, 662, 742, 856],
+        [308, 696, 468, 844, 730, 194, 194, 342, 0, 274, 388, 810, 696, 662, 320, 1084, 514],
+        [194, 742, 742, 890, 776, 240, 468, 388, 274, 0, 342, 536, 422, 388, 274, 810, 468],
+        [536, 1084, 400, 1232, 1118, 582, 354, 730, 388, 342, 0, 878, 764, 730, 388, 1152, 354],
+        [502, 594, 1278, 514, 400, 776, 1004, 468, 810, 536, 878, 0, 114, 308, 650, 274, 844],
+        [388, 480, 1164, 628, 514, 662, 890, 354, 696, 422, 764, 114, 0, 194, 536, 388, 730],
+        [354, 674, 1130, 822, 708, 628, 856, 320, 662, 388, 730, 308, 194, 0, 342, 422, 536],
+        [468, 1016, 788, 1164, 1050, 514, 514, 662, 320, 274, 388, 650, 536, 342, 0, 764, 194],
+        [776, 868, 1552, 560, 674, 1050, 1278, 742, 1084, 810, 1152, 274, 388, 422, 764, 0, 798],
+        [662, 1210, 754, 1358, 1244, 708, 480, 856, 514, 468, 354, 844, 730, 536, 194, 798, 0]
+    ]
+    data['num_vehicles'] = len(formulation.M)
+    data['depot'] = formulation.sigma
+    data['demands'] = [0, 1, 1, 2, 4, 2, 4, 8, 8, 1, 2, 1, 2, 4, 4, 8, 8]
+    data['vehicle_capacity'] = formulation.Q
+    data['service_times'] = np.full(shape=(1,len(data['demands'])), fill_value=formulation.t_sto)
+
+    # Solver initialization
+    TimeLimit = 60 * 60 * 3 # 3 HOURS
+    ap = hgs.AlgorithmParameters(timeLimit=TimeLimit)
+    hgs_solver = hgs.Solver(parameters=ap, verbose=True)
+
+    # Solve
+    result = hgs_solver.solve_cvrp(data)
+    print(result.cost)
+    print(result.routes)
+    return result
+
+
+
 best_set_covers: dict[set[int], float] = {}
 treated_set_covers: dict[set[int], float] = {}
 consecutive_without_improvement = 0
@@ -258,7 +422,7 @@ bestSol: tuple[set[int], float]
 while elapsed_time < TIME_LIMIT and consecutive_without_improvement < 100:
     iteration_start_time = time.time()
     # PHASE 1
-    V_sel, V_sel_cost = constructSet(Vp, W, V_rank, V_sto, sigma, Ap, c)
+    V_sel, V_sel_cost = constructSet_LLM(Vp, W, V_rank, V_sto, sigma, Ap, c)
     if V_sel in treated_set_covers:
         treated_set_covers[V_sel] # penalized (how???)
     else:
