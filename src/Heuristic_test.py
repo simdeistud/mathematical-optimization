@@ -1,4 +1,5 @@
 from utils.data_parser import CustomerBasedFormulation
+from collections import defaultdict
 from typing import Dict, Tuple
 import random
 import time
@@ -13,7 +14,7 @@ class SDVRPFormulation:
         self.costs: dict[tuple[int, int], float] = {}
         self.depot: int = 0
         self.tours: set[int] = set()
-        self.demands: dict[int, int] = {}
+        self.demands: dict[int, float] = {}
         self.capacity: float = 0
         self.t_sto: float = 0
     
@@ -21,7 +22,7 @@ class SDVRPFormulation:
     def from_CustomerBasedFormulation(formulation: CustomerBasedFormulation, V_sel: set[int]) -> SDVRPFormulation:
         result: SDVRPFormulation = SDVRPFormulation()
         result.V = V_sel
-        result.A = {arc for arc in formulation.Ap if arc[0] in result.V and arc[1] in result.V}
+        result.A = {arc for arc in formulation.Ap if arc[0] in result.V and arc[1] in result.V and arc[0] != arc[1]} # We remove self-loops
         result.costs = {arc : formulation.c[arc] for arc in result.A}
         result.depot = formulation.sigma
         result.tours = formulation.M
@@ -35,7 +36,7 @@ class SDVRPFormulation:
                     favorite_collection = v
                     break
             assigned_collections[w] = favorite_collection
-        aggregated_demands: dict[int, int] = {}
+        aggregated_demands: dict[int, float] = {}
         for assignment in assigned_collections:
             if aggregated_demands.get(assigned_collections[assignment]) is None:
                 aggregated_demands[assigned_collections[assignment]] = formulation.d[assignment]
@@ -51,28 +52,16 @@ class CVRPFormulation:
         self.costs: dict[tuple[int, int], float] = {}
         self.depot: int = 0
         self.tours: set[int] = set()
-        self.demands: Dict[int, int] = {}
+        self.demands: dict[int, float] = {}
         self.capacity: float = 0
         self.t_sto: float = 0
+        self.splits_mapping: dict[int, set[int]] = {}
     
     
     @staticmethod
-    def split_demand(demand: int, capacity: float) -> dict[int, int]:
+    def split_demand(demand: float, capacity: float) -> list[float]:
         """
         Split a demand according to the 20/10/5/1 rule.
-
-        Returns:
-            {
-                20: number of pieces of size 0.20 * capacity,
-                10: number of pieces of size 0.10 * capacity,
-                 5: number of pieces of size 0.05 * capacity,
-                 1: number of pieces of size 0.01 * capacity,
-            }
-
-        Note:
-            Any residual demand smaller than 0.01 * capacity is NOT represented
-            by this return type. You need to handle it separately when creating
-            actual CVRP pseudo-customers.
         """
         if demand < 0:
             raise ValueError("Demand must be non-negative.")
@@ -80,38 +69,141 @@ class CVRPFormulation:
             raise ValueError("Capacity must be positive.")
 
         remaining = float(demand)
-        eps = 1e-9
 
-        split: dict[int, int] = {}
+        split: list[float] = []
 
         for pct in (20, 10, 5, 1):
             piece_size = (pct / 100.0) * capacity
-            n_pieces = int(math.floor((remaining + eps) / piece_size))
-
-            split[pct] = n_pieces
+            n_pieces = int(math.floor((remaining) / piece_size))
+            split.append(piece_size)
             remaining -= n_pieces * piece_size
-
-            # Avoid tiny negative residuals due to floating point noise
-            if abs(remaining) < eps:
-                remaining = 0.0
+        split.append(remaining)
 
         return split
 
-    @staticmethod
-    def from_SDVRPFormulation(formulation: SDVRPFormulation) -> CVRPFormulation:
-        result: CVRPFormulation = CVRPFormulation()
-        result.depot = formulation.depot
-        result.tours = formulation.tours
-        result.capacity = formulation.capacity
-        result.t_sto = formulation.t_sto
-        for v in formulation.V:
-            if formulation.demands[v] > 0.1 * formulation.capacity:
-            else:
-                result.V.add(v)
-                [result.A.add(arc) for arc in formulation.A if arc[0] == v or arc[1] == v]
-                result.demands[v] = formulation.demands[v]
-                [result.costs[arc] = formulation.costs[arc] for arc in formulation.A if arc[0] == v or arc[1] == v]
-        return result
+@staticmethod
+def from_SDVRPFormulation(formulation: SDVRPFormulation) -> CVRPFormulation:
+    result = CVRPFormulation()
+
+    result.V = set(formulation.V)
+    result.A = set(formulation.A)
+    result.costs = dict(formulation.costs)
+    result.depot = formulation.depot
+    result.tours = formulation.tours
+    result.capacity = formulation.capacity
+    result.t_sto = formulation.t_sto
+
+    result.demands = dict(formulation.demands)
+    result.splits_mapping = defaultdict(set)
+
+    next_split_node = -1
+
+    for v in list(formulation.V):
+        if v == formulation.depot:
+            continue
+
+        demand = formulation.demands[v]
+
+        if demand > 0.1 * formulation.capacity:
+            splits = CVRPFormulation.split_demand(demand, formulation.capacity)
+
+            original_incident_arcs = [
+                arc for arc in result.A
+                if arc[0] == v or arc[1] == v
+            ]
+
+            for split_demand in splits:
+                split_node = next_split_node
+                next_split_node -= 1
+
+                result.V.add(split_node)
+                result.demands[split_node] = split_demand
+                result.splits_mapping[v].add(split_node)
+
+                for arc in original_incident_arcs:
+                    u, w = arc
+
+                    if u == v:
+                        new_arc = (split_node, w)
+                    else:
+                        new_arc = (u, split_node)
+
+                    result.A.add(new_arc)
+                    result.costs[new_arc] = result.costs[arc]
+
+            result.V.remove(v)
+            result.demands.pop(v, None)
+
+            result.A = {
+                arc for arc in result.A
+                if arc[0] != v and arc[1] != v
+            }
+
+            result.costs = {
+                arc: cost
+                for arc, cost in result.costs.items()
+                if arc in result.A
+            }
+
+    return result
+
+@staticmethod
+def to_SDVRPFormulation(formulation: CVRPFormulation) -> SDVRPFormulation:
+    result = SDVRPFormulation()
+
+    result.depot = formulation.depot
+    result.capacity = formulation.capacity
+    result.t_sto = formulation.t_sto
+
+    result.V = set(formulation.V)
+    result.A = set()
+    result.costs = {}
+    result.demands = dict(formulation.demands)
+
+    result.tours = formulation.tours
+
+    # Build inverse map: split node -> original customer
+    split_to_original = {}
+
+    for original_node, split_nodes in formulation.splits_mapping.items():
+        for split_node in split_nodes:
+            split_to_original[split_node] = original_node
+
+    split_nodes = set(split_to_original.keys())
+
+    # Remove artificial split nodes
+    result.V -= split_nodes
+
+    # Reinsert original SDVRP customers
+    for original_node, split_nodes in formulation.splits_mapping.items():
+        result.V.add(original_node)
+
+        result.demands[original_node] = int(sum(
+            formulation.demands[split_node]
+            for split_node in split_nodes
+        ))
+
+        for split_node in split_nodes:
+            result.demands.pop(split_node, None)
+
+    # Reconstruct arcs by replacing split nodes with their original customer
+    for arc in formulation.A:
+        u, v = arc
+
+        original_u = split_to_original.get(u, u)
+        original_v = split_to_original.get(v, v)
+
+        # Optional: avoid self-loops introduced by merging split nodes
+        if original_u == original_v:
+            continue
+
+        new_arc = (original_u, original_v)
+        result.A.add(new_arc)
+
+        # Costs should be identical for all duplicated split arcs
+        result.costs[new_arc] = formulation.costs[arc]
+
+    return result
 
 
 
@@ -365,50 +457,89 @@ def SDVRPtoCVRP(formulation: CustomerBasedFormulation, V_sel: set[int]):
     formulation.Ap = {arc for arc in formulation.Ap if arc[0] in formulation.Vp and arc[1] in formulation.Vp}
     formulation.c = {arc : formulation.c[arc] for arc in formulation.Ap}
 
-def arcs_to_distance_matrix(nodes: set[int], costs: dict[tuple[int, int], float]) -> list[list[float]]:
-    matrix: list[list[float]] = []
-    for node in nodes:
+def arcs_to_distance_matrix(
+    nodes: set[int],
+    costs: dict[tuple[int, int], float],
+    missing_value: float = float("inf")
+) -> tuple[list[list[float]], dict[int, int], list[int]]:
+    ordered_nodes = sorted(nodes)
 
-    return matrix
+    node_to_idx = {
+        node: idx
+        for idx, node in enumerate(ordered_nodes)
+    }
 
+    idx_to_node = ordered_nodes
 
-def solve_CVRP(formulation: CustomerBasedFormulation) -> hgs.RoutingSolution:
-    data = dict()
-    data['distance_matrix'] = arcs_to_distance_matrix(formulation.Vp, formulation.c)
-    [
-        [0, 548, 776, 696, 582, 274, 502, 194, 308, 194, 536, 502, 388, 354, 468, 776, 662],
-        [548, 0, 684, 308, 194, 502, 730, 354, 696, 742, 1084, 594, 480, 674, 1016, 868, 1210],
-        [776, 684, 0, 992, 878, 502, 274, 810, 468, 742, 400, 1278, 1164, 1130, 788, 1552, 754],
-        [696, 308, 992, 0, 114, 650, 878, 502, 844, 890, 1232, 514, 628, 822, 1164, 560, 1358],
-        [582, 194, 878, 114, 0, 536, 764, 388, 730, 776, 1118, 400, 514, 708, 1050, 674, 1244],
-        [274, 502, 502, 650, 536, 0, 228, 308, 194, 240, 582, 776, 662, 628, 514, 1050, 708],
-        [502, 730, 274, 878, 764, 228, 0, 536, 194, 468, 354, 1004, 890, 856, 514, 1278, 480],
-        [194, 354, 810, 502, 388, 308, 536, 0, 342, 388, 730, 468, 354, 320, 662, 742, 856],
-        [308, 696, 468, 844, 730, 194, 194, 342, 0, 274, 388, 810, 696, 662, 320, 1084, 514],
-        [194, 742, 742, 890, 776, 240, 468, 388, 274, 0, 342, 536, 422, 388, 274, 810, 468],
-        [536, 1084, 400, 1232, 1118, 582, 354, 730, 388, 342, 0, 878, 764, 730, 388, 1152, 354],
-        [502, 594, 1278, 514, 400, 776, 1004, 468, 810, 536, 878, 0, 114, 308, 650, 274, 844],
-        [388, 480, 1164, 628, 514, 662, 890, 354, 696, 422, 764, 114, 0, 194, 536, 388, 730],
-        [354, 674, 1130, 822, 708, 628, 856, 320, 662, 388, 730, 308, 194, 0, 342, 422, 536],
-        [468, 1016, 788, 1164, 1050, 514, 514, 662, 320, 274, 388, 650, 536, 342, 0, 764, 194],
-        [776, 868, 1552, 560, 674, 1050, 1278, 742, 1084, 810, 1152, 274, 388, 422, 764, 0, 798],
-        [662, 1210, 754, 1358, 1244, 708, 480, 856, 514, 468, 354, 844, 730, 536, 194, 798, 0]
+    n = len(ordered_nodes)
+
+    matrix = [
+        [
+            0.0 if i == j else missing_value
+            for j in range(n)
+        ]
+        for i in range(n)
     ]
-    data['num_vehicles'] = len(formulation.M)
-    data['depot'] = formulation.sigma
-    data['demands'] = [0, 1, 1, 2, 4, 2, 4, 8, 8, 1, 2, 1, 2, 4, 4, 8, 8]
-    data['vehicle_capacity'] = formulation.Q
-    data['service_times'] = np.full(shape=(1,len(data['demands'])), fill_value=formulation.t_sto)
 
-    # Solver initialization
-    TimeLimit = 60 * 60 * 3 # 3 HOURS
+    for (u, v), cost in costs.items():
+        if u not in node_to_idx or v not in node_to_idx:
+            continue
+
+        i = node_to_idx[u]
+        j = node_to_idx[v]
+
+        matrix[i][j] = cost
+
+    return matrix, node_to_idx, idx_to_node
+
+
+def solve_CVRP(formulation: CVRPFormulation) -> hgs.RoutingSolution:
+    data = dict()
+
+    distance_matrix, node_to_idx, idx_to_node = arcs_to_distance_matrix(
+        nodes=formulation.V,
+        costs=formulation.costs,
+        missing_value=10**9
+    )
+
+    data["distance_matrix"] = distance_matrix
+
+    # If formulation.tours represents the vehicle set, otherwise replace this.
+    data["num_vehicles"] = len(formulation.tours)
+
+    data["depot"] = node_to_idx[formulation.depot]
+
+    data["demands"] = [
+        0 if node == formulation.depot else formulation.demands[node]
+        for node in idx_to_node
+    ]
+
+    data["vehicle_capacity"] = formulation.capacity
+
+    data["service_times"] = np.full(
+        shape=(1, len(data["demands"])),
+        fill_value=formulation.t_sto
+    )
+
+    TimeLimit = 60 * 60 * 3
     ap = hgs.AlgorithmParameters(timeLimit=TimeLimit)
     hgs_solver = hgs.Solver(parameters=ap, verbose=True)
 
-    # Solve
     result = hgs_solver.solve_cvrp(data)
+
     print(result.cost)
+
+    # Solver routes are expressed in internal matrix indices.
     print(result.routes)
+
+    # Convert routes back to your original node ids.
+    original_routes = [
+        [idx_to_node[idx] for idx in route]
+        for route in result.routes
+    ]
+
+    print(original_routes)
+
     return result
 
 

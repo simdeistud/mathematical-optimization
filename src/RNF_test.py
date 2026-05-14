@@ -9,7 +9,7 @@ import utils.circuits
 model = gp.Model("road-network_formulation")
 VALID_INEQUALITY_ENABLED = True
 
-instance = RoadNetworkFormulation.parse_instance_file("C:\\Users\\simone\\source\\repos\\mathematical-optimization\\data\\15-0-6.dat")
+instance = RoadNetworkFormulation.parse_instance_file("C:\\Users\\simone\\source\\repos\\mathematical-optimization\\data\\15-50-6.dat")
 
 M = instance.M
 d = instance.d
@@ -200,6 +200,62 @@ if model.status == GRB.OPTIMAL:
 else:
     print("No optimal solution found.")
 
+
+print("file name actually parsed")
+print("|V_sto parsed|", len(instance.V_sto))
+print("|rank union|", len(set().union(*instance.V_rank.values())))
+print("Q", instance.Q)
+print("sigma", instance.sigma)
+print("c[153,11]", instance.c.get((153,11)))
+print("c[11,153]", instance.c.get((11,153)))
+
+
+print("Objective:", model.ObjVal)
+
+if model.SolCount > 0:
+    travel = sum(
+        c[(h, hp)] * x[h, hp, k].X
+        for (h, hp) in A
+        for k in M
+    )
+
+    stops = sum(
+        t_sto * y[j, k].X
+        for j in V_sto
+        for k in M
+    )
+
+    print("travel =", travel)
+    print("stops =", stops)
+    print("total =", travel + stops)
+    print("number of stops =", sum(y[j, k].X for j in V_sto for k in M))
+
+print("Selected stops:")
+for j in sorted(V_sto):
+    if sum(y[j, k].X for k in M) > 0.5:
+        collected = sum(q[j, k].X for k in M)
+        print(j, "collected =", collected)
+
+print("Allocations:")
+for i in sorted(W):
+    for j in V_rank[i]:
+        if z[i, j].X > 0 :
+            print(
+                f"demand {i} -> stop {j}, "
+                f"demand={d[i]}, rank={instance.rank(i, j)}"
+            )
+
+print("Positive x arcs:")
+for k in M:
+    print("Tour", k)
+    for (h, hp) in sorted(A):
+        val = x[h, hp, k].X
+        if val > 0.5:
+            print((h, hp), "x =", val, "cost =", c[(h, hp)])
+
+print("|V| =", len(instance.V))      # RN only
+print("|A| =", len(instance.A))      # RN only
+print("|W| =", len(instance.W))
 
 tours = utils.circuits.extract_eulerian_tours(x, A, M, sigma)
 
