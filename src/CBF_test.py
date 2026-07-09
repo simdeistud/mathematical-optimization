@@ -1,14 +1,12 @@
-import math
-
 import gurobipy as gp
 from gurobipy import GRB
-from utils.data_parser import CustomerBasedFormulation
+from utils.formulation import CustomerBasedFormulation
 
 # Create model
 model = gp.Model("customer-based_formulation")
 VALID_INEQUALITY_ENABLED = True
 
-instance = CustomerBasedFormulation.parse_instance_file("C:\\Users\\simone\\source\\repos\\mathematical-optimization\\data\\15-50-1.dat")
+instance = CustomerBasedFormulation("C:\\Users\\simon\\source\\repos\\mathematical-optimization\\data\\15-50-1.dat")
 
 Vp = instance.Vp
 W = instance.W

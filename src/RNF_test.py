@@ -1,15 +1,13 @@
-import math
-
 import gurobipy as gp
 from gurobipy import GRB
-from utils.data_parser import RoadNetworkFormulation
+from utils.formulation import RoadNetworkFormulation
 import utils.circuits
 
 # Create model
 model = gp.Model("road-network_formulation")
 VALID_INEQUALITY_ENABLED = True
 
-instance = RoadNetworkFormulation.parse_instance_file("C:\\Users\\simone\\source\\repos\\mathematical-optimization\\data\\15-50-6.dat")
+instance = RoadNetworkFormulation("C:\\Users\\simon\\source\\repos\\mathematical-optimization\\data\\15-50-1.dat")
 
 M = instance.M
 d = instance.d

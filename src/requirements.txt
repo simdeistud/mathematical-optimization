@@ -1,4 +1,4 @@
-gurobipy==13.0.1
+gurobipy
 hygese
 networkx
 matplotlib

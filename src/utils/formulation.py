@@ -1,30 +1,35 @@
-from __future__ import annotations
-
 import heapq
 import math
 import random
 import argparse
-from typing import Dict, Tuple, List, Set, Optional
 
-class RoadNetworkFormulation:
+# Class modeling a generic instance of the C𝑚-CTP-R problem
+class CmCTPRFormulation:
     def __init__(self) -> None:
-        self.V: Set[int] = set()
+        self.V: set[int] = set()
         self.coords: dict[int, tuple[int, int]] = {}
-        self.W: Set[int] = set()
-        self.A: set[Tuple[int, int]] = set()
-        self.c: Dict[Tuple[int, int], float] = {} # The cost is not the length of the arc, but its travel time in seconds
-        self.V_sto: Set[int] = set()
-        self.V_rank: Dict[int, List[int]] = {}
-        self.M: Set[int] = set()
-        self.d: Dict[int, int] = {}
+        self.W: set[int] = set()
+        self.A: set[tuple[int, int]] = set()
+        self.c: dict[tuple[int, int], float] = {} # The cost is not the length of the arc, but its travel time in seconds
+        self.V_sto: set[int] = set()
+        self.V_rank: dict[int, list[int]] = {}
+        self.M: set[int] = set()
+        self.d: dict[int, int] = {}
         self.dtot: int = 0
         self.Q: int = 0
         self.sigma: int = 0
         self.t_sto: float = 0
     
+    def rank(self, i: int, j: int) -> int:
+        if j in self.V_rank[i]:
+            return self.V_rank[i].index(j)
+        else:
+            raise ValueError(f"Node {j} is not in the rank list of node {i}")
+    
     @staticmethod
-    def parse_instance_file(dat_path: str) -> RoadNetworkFormulation:
-        formulation = RoadNetworkFormulation()
+    # Parser to take a .dat instance file and instance a formulation from it
+    def parse_instance_file(dat_path: str) -> CmCTPRFormulation:
+        formulation = CmCTPRFormulation()
         with open(dat_path, "r") as f:
             lines = f.read().split("\n")
             c = 4 # SKIP FIRST 4 LINES OF USELESS METADATA
@@ -32,7 +37,7 @@ class RoadNetworkFormulation:
                 line = lines[c]
                 # PARSE HEADER
                 if line.startswith("NumberOfTours"):
-                    formulation.M = set(range(1, int(line.split(":")[-1].strip()) + 1))
+                        formulation.M = set(range(1, int(line.split(":")[-1].strip()) + 1))
                 elif line.startswith("VehicleCapacity"):
                     formulation.Q = int(line.split(":")[-1].strip())
                 elif line.startswith("TotalWaste"):
@@ -92,74 +97,73 @@ class RoadNetworkFormulation:
             )
         # DERIVE Q AS PER SECTION 6.1 OF THE PAPER
         formulation.Q = math.ceil(1.05 * (formulation.dtot / len(formulation.M)))
-        # SET t_sto TO 5s AS PER SECTION 3.3 A6) OF THE PAPER
+        # set t_sto TO 5s AS PER SECTION 3.3 A6) OF THE PAPER
         formulation.t_sto = 5
         return formulation
-    
-    def rank(self, i: int, j: int) -> int:
-        return self.V_rank[i].index(j)
 
-class CustomerBasedFormulation:
-    def __init__(self) -> None:
-        self.Vp: Set[int] = set()
-        self.W: Set[int] = set()
-        self.Ap: set[Tuple[int, int]] = set()
-        self.c: Dict[Tuple[int, int], float] = {}
-        self.V_sto: Set[int] = set()
-        self.V_rank: Dict[int, List[int]] = {}
-        self.M: Set[int] = set()
-        self.d: Dict[int, int] = {}
-        self.dtot: int = 0
-        self.Q: float = 0.0
-        self.sigma: int = 0
-        self.t_sto: float = 0
+# Class modeling the Road Network Formulation (RNF) from the paper
+class RoadNetworkFormulation(CmCTPRFormulation):
+    def __init__(self, dat_path: str) -> None:
+        # The RNF follows naturally from the given instance files, so no processing is needed
+        super().__init__()
+        formulation = CmCTPRFormulation.parse_instance_file(dat_path)
+        self.V = formulation.V
+        self.coords = formulation.coords
+        self.W = formulation.W
+        self.A = formulation.A
+        self.c = formulation.c
+        self.V_sto = formulation.V_sto
+        self.V_rank = formulation.V_rank
+        self.M = formulation.M
+        self.d = formulation.d
+        self.dtot = formulation.dtot
+        self.Q = formulation.Q
+        self.sigma = formulation.sigma
+        self.t_sto = formulation.t_sto
+        
 
-    @staticmethod
-    def parse_instance_file(dat_path: str) -> CustomerBasedFormulation:
-        RN = RoadNetworkFormulation.parse_instance_file(dat_path)
-        formulation = CustomerBasedFormulation()
-        formulation.W = RN.W
-        formulation.V_sto = RN.V_sto
-        formulation.V_rank = RN.V_rank
-        formulation.M = RN.M
-        formulation.d = RN.d
-        formulation.dtot = RN.dtot
-        formulation.Q = RN.Q
-        formulation.sigma = RN.sigma
-        formulation.t_sto = RN.t_sto
-        # CREATE V'
-        formulation.Vp = RN.V_sto.union({RN.sigma})   
-        # CREATE A' with shortest-path costs in the underlying road network
-        # (ordered pairs, excluding self-loops)
-        for j in formulation.Vp:
-            for jp in formulation.Vp:
-                formulation.Ap.add((j, jp))
+# Class modeling the Road Network Formulation (CBF) from the paper
+class CustomerBasedFormulation(CmCTPRFormulation):
+    def __init__(self, dat_path: str) -> None:
+        super().__init__()
+        self.Vp: set[int] = set()
+        self.Ap: set[tuple[int, int]] = set()
+        formulation = CmCTPRFormulation.parse_instance_file(dat_path)
+        self.coords = formulation.coords
+        self.W = formulation.W
+        self.c = formulation.c
+        self.V_sto = formulation.V_sto
+        self.V_rank = formulation.V_rank
+        self.M = formulation.M
+        self.d = formulation.d
+        self.dtot = formulation.dtot
+        self.Q = formulation.Q
+        self.sigma = formulation.sigma
+        self.t_sto = formulation.t_sto
+        # DERIVE Vp
+        self.Vp = formulation.V_sto.union({formulation.sigma})
+        # DERIVE A' with shortest-path costs
+        for j in self.Vp:
+            for jp in self.Vp:
+                self.Ap.add((j, jp))
                 time = dijkstra_min_cost(
                         start=j,
                         end=jp,
-                        nodes=RN.V | RN.W,
-                        arcs=RN.A,
-                        costs=RN.c,
+                        nodes=formulation.V | formulation.W,
+                        arcs=formulation.A,
+                        costs=formulation.c,
                     )
                 if time == math.inf:
                     raise ValueError(f"No path from {j} to {jp} in the underlying road network")   
-                formulation.c[(j, jp)] = time
-        return formulation
-    
-    def rank(self, i: int, j: int) -> int:
-        if j in self.V_rank[i]:
-            return self.V_rank[i].index(j)
-        else:
-            raise ValueError(f"Node {j} is not in the rank list of node {i}")
+                self.c[(j, jp)] = time
 
-
-
+# Helper function to calculate shortest path between nodes using Dijkstra
 def dijkstra_min_cost(
     start: int,
     end: int,
-    nodes: Set[int],
-    arcs: Set[Tuple[int, int]],
-    costs: Dict[Tuple[int, int], float],
+    nodes: set[int],
+    arcs: set[tuple[int, int]],
+    costs: dict[tuple[int, int], float],
 ) -> float:
     """
     Heap-based Dijkstra on a directed graph with float arc costs.
@@ -173,7 +177,7 @@ def dijkstra_min_cost(
         return 0.0
 
     # adjacency list: node -> list[(neighbor, weight)]
-    adj: Dict[int, List[Tuple[int, float]]] = {u: [] for u in nodes}
+    adj: dict[int, list[tuple[int, float]]] = {u: [] for u in nodes}
     for (u, v) in arcs:
         w = costs.get((u, v))
         if w is None:
@@ -183,9 +187,9 @@ def dijkstra_min_cost(
             raise ValueError(f"Negative arc cost on ({u},{v}) = {w}; Dijkstra requires w >= 0.")
         adj[u].append((v, float(w)))
 
-    dist: Dict[int, float] = {u: math.inf for u in nodes}
+    dist: dict[int, float] = {u: math.inf for u in nodes}
     dist[start] = 0.0
-    pq: List[Tuple[float, int]] = [(0.0, start)]
+    pq: list[tuple[float, int]] = [(0.0, start)]
 
     while pq:
         du, u = heapq.heappop(pq)
@@ -202,15 +206,12 @@ def dijkstra_min_cost(
 
     return dist[end]
 
-      
-
-
 def main():
     ap = argparse.ArgumentParser(description="Parse Cm-CTP-R instance text file into CmCTPR_Instance.")
     ap.add_argument("path", type=str, help="Path to instance file")
     args = ap.parse_args()
 
-    formulation = RoadNetworkFormulation.parse_instance_file(args.path)
+    formulation = RoadNetworkFormulation(args.path)
     print("RNF OK")
     print("|W| =", len(formulation.W))
     sampleWnode = random.choice(list(formulation.W))
@@ -222,7 +223,7 @@ def main():
     print("|A| =", len(formulation.A))
     print("|V_sto| =", len(formulation.V_sto))
 
-    formulation_cbf = CustomerBasedFormulation.parse_instance_file(args.path)
+    formulation_cbf = CustomerBasedFormulation(args.path)
     print("CBF OK")
     
 
