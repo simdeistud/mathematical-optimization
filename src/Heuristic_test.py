@@ -5,7 +5,7 @@ import math
 import hygese as hgs
 
 instance = CustomerBasedFormulation()
-instance.import_CmCTPRF("C:\\Users\\simon\\source\\repos\\mathematical-optimization\\data\\15-50-2.dat")
+instance.import_CmCTPRF("C:\\Users\\simon\\source\\repos\\mathematical-optimization\\data\\15-50-1.dat")
 
 Vp = instance.Vp
 W = instance.W

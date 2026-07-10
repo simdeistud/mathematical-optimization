@@ -6,7 +6,8 @@ from utils.formulation import CustomerBasedFormulation
 model = gp.Model("customer-based_formulation")
 VALID_INEQUALITY_ENABLED = True
 
-instance = CustomerBasedFormulation("C:\\Users\\simon\\source\\repos\\mathematical-optimization\\data\\15-50-1.dat")
+instance = CustomerBasedFormulation()
+instance.import_CmCTPRF("C:\\Users\\simon\\source\\repos\\mathematical-optimization\\data\\15-50-1.dat")
 
 Vp = instance.Vp
 W = instance.W

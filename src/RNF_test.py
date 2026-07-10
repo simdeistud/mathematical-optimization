@@ -7,7 +7,8 @@ import utils.circuits
 model = gp.Model("road-network_formulation")
 VALID_INEQUALITY_ENABLED = True
 
-instance = RoadNetworkFormulation("C:\\Users\\simon\\source\\repos\\mathematical-optimization\\data\\15-50-1.dat")
+instance = RoadNetworkFormulation()
+instance.import_CmCTPRF("C:\\Users\\simon\\source\\repos\\mathematical-optimization\\data\\15-50-1.dat")
 
 M = instance.M
 d = instance.d
