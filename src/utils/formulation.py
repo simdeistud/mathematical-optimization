@@ -321,10 +321,6 @@ class CVRPFormulation:
             self.A = {arc for arc in self.A if arc[0] != v and arc[1] != v}
             self.costs = {arc : self.costs[arc] for arc in self.A}
             self.demands.pop(v)
-
-    def export_SDVRPF(self) -> SDVRPFormulation|None:
-        return None
-
     
 class HygeseFormulation:
     def __init__(self):
@@ -402,10 +398,7 @@ class HygeseFormulation:
                 distance_vector.append(distance)
             self.distance_matrix.append(distance_vector)
         self.num_vehicles = len(formulation.tours)
-        self.vehicle_capacity = formulation.Q
-
-    def export_CVRPF(self) -> CVRPFormulation|None:
-        return None
+        self.vehicle_capacity = formulation.Q        
 
 def main():
     #ap = argparse.ArgumentParser(description="Parse Cm-CTP-R instance text file into CmCTPR_Instance.")
