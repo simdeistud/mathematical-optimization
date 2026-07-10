@@ -4,7 +4,7 @@ import time
 import math
 import hygese as hgs
 
-def solve(dat_path: str):
+def solve(dat_path: str, TIME_LIMIT:int = 300):
     instance = CustomerBasedFormulation()
     instance.import_CmCTPRF(dat_path)
 
@@ -145,7 +145,6 @@ def solve(dat_path: str):
     treated_set_covers: dict[frozenset[int], float] = {}
     consecutive_without_improvement = 0
     elapsed_time = 0
-    TIME_LIMIT: int = 60 * 60 * 3 # 3H LIMIT
     bestSol = (None, math.inf)
     while elapsed_time < TIME_LIMIT and consecutive_without_improvement < 100:
         iteration_start_time = time.time()

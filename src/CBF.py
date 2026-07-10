@@ -2,7 +2,7 @@ import gurobipy as gp
 from gurobipy import GRB
 from utils.formulation import CustomerBasedFormulation
 
-def solve(dat_path: str):
+def solve(dat_path: str, TIME_LIMIT:int = 300):
     # Create model
     model = gp.Model("customer-based_formulation")
     VALID_INEQUALITY_ENABLED = True
@@ -172,7 +172,6 @@ def solve(dat_path: str):
     )
 
     # Optimize
-    TimeLimit = 60 * 60 * 3 # 3H LIMIT
-    model.setParam("TimeLimit", TimeLimit)
+    model.setParam("TimeLimit", TIME_LIMIT)
     model.optimize()
     return model.objVal, model.Runtime
