@@ -2,6 +2,7 @@ import heapq
 import math
 import random
 import argparse
+import itertools
 
 # Class modeling a generic instance of the C𝑚-CTP-R problem
 class CmCTPRFormulation:
@@ -38,7 +39,7 @@ class CmCTPRFormulation:
                 # PARSE HEADER
                 if line.startswith("NumberOfTours"):
                         formulation.M = set(range(1, int(line.split(":")[-1].strip()) + 1))
-                elif line.startswith("VehicleCapacity"):
+                elif line.startswith("VehicleQ"):
                     formulation.Q = int(line.split(":")[-1].strip())
                 elif line.startswith("TotalWaste"):
                     formulation.dtot = int(line.split(":")[-1].strip())
@@ -103,9 +104,11 @@ class CmCTPRFormulation:
 
 # Class modeling the Road Network Formulation (RNF) from the paper
 class RoadNetworkFormulation(CmCTPRFormulation):
-    def __init__(self, dat_path: str) -> None:
+    def __init__(self) -> None:
         # The RNF follows naturally from the given instance files, so no processing is needed
         super().__init__()
+    
+    def import_CmCTPRF(self, dat_path: str):
         formulation = CmCTPRFormulation.parse_instance_file(dat_path)
         self.V = formulation.V
         self.coords = formulation.coords
@@ -124,10 +127,12 @@ class RoadNetworkFormulation(CmCTPRFormulation):
 
 # Class modeling the Road Network Formulation (CBF) from the paper
 class CustomerBasedFormulation(CmCTPRFormulation):
-    def __init__(self, dat_path: str) -> None:
+    def __init__(self) -> None:
         super().__init__()
         self.Vp: set[int] = set()
         self.Ap: set[tuple[int, int]] = set()
+        
+    def import_CmCTPRF(self, dat_path: str):
         formulation = CmCTPRFormulation.parse_instance_file(dat_path)
         self.coords = formulation.coords
         self.W = formulation.W
@@ -206,12 +211,168 @@ def dijkstra_min_cost(
 
     return dist[end]
 
-def main():
-    ap = argparse.ArgumentParser(description="Parse Cm-CTP-R instance text file into CmCTPR_Instance.")
-    ap.add_argument("path", type=str, help="Path to instance file")
-    args = ap.parse_args()
+class SDVRPFormulation:
+    def __init__(self):
+        self.V: set[int] = set()
+        self.A: set[tuple[int, int]] = set()
+        self.costs: dict[tuple[int, int], float] = {}
+        self.tours: set[int] = set()
+        self.demands: dict[int, float] = {}
+        self.Q: int = 0
+        self.depot: int = 0
+        self.t_sto: float = 0
 
-    formulation = RoadNetworkFormulation(args.path)
+    def import_CBF(self, formulation: CustomerBasedFormulation, V_sel: set[int]):
+        self.V = V_sel
+        # We remove arcs and costs that are not related to V_sel nodes
+        self.A = {arc for arc in formulation.Ap if arc[0] in self.V and arc[1] in self.V and arc[0] != arc[1]}
+        self.costs = {arc : formulation.c[arc] for arc in self.A}
+        self.depot = formulation.sigma
+        self.tours = formulation.M
+        self.Q = formulation.Q
+        self.t_sto = formulation.t_sto
+        # For each demand node, we take its first favourite disposal location that is also in V_sel.
+        # Then, we associate and aggregate its demand to the V_sel node.
+        for v in V_sel:
+            self.demands[v] = 0
+        for w in formulation.W:
+            for v in formulation.V_rank[w]:
+                if v in V_sel:
+                    self.demands[v] += formulation.d[w]
+                    break
+
+class CVRPFormulation:
+    def __init__(self):
+        self.V: set[int] = set()
+        self.A: set[tuple[int, int]] = set()
+        self.costs: dict[tuple[int, int], float] = {}
+        self.tours: set[int] = set()
+        self.demands: dict[int, float] = {}
+        self.Q: int = 0
+        self.depot: int = 0
+        self.t_sto: float = 0
+        self._splits_mapping: dict[int, set[int]] = {}
+    
+    def import_SDVRPF(self, formulation: SDVRPFormulation):
+        self.V = formulation.V.copy()
+        self.A = formulation.A.copy()
+        self.costs = formulation.costs.copy()
+        self.depot = formulation.depot
+        self.tours = formulation.tours.copy()
+        self.demands = formulation.demands.copy()
+        self.Q = formulation.Q
+        self.t_sto = formulation.t_sto
+        # For each node whose demand exceeds 0.1*Q we split it into new nodes using the heuristic
+        # delineated in the paper. This means adding new nodes and new arcs, and needing to
+        # keep track of the splits to convert back to the SDVRP formulation.
+        for v in formulation.V:
+            # We don't split nodes with small demand
+            if formulation.demands[v] < 0.1*formulation.Q:
+                continue
+            m_20: int = math.floor((formulation.demands[v]) / (0.2*formulation.Q))
+            m_10: int = math.floor((formulation.demands[v] - m_20*0.2*formulation.Q) / (0.1*formulation.Q))
+            m_5: int = math.floor((formulation.demands[v] - m_20*0.2*formulation.Q - m_10*0.1*formulation.Q) / (0.05*formulation.Q))
+            m_1: int = math.floor((formulation.demands[v] - m_20*0.2*formulation.Q - m_10*0.1*formulation.Q - m_5*0.05*formulation.Q) / (0.01*formulation.Q))
+            residue: float = formulation.demands[v] - m_20*0.2*formulation.Q - m_10*0.1*formulation.Q - m_5*0.05*formulation.Q - m_1*0.01*formulation.Q
+            # We create a LUT to create nodes and arcs easier
+            splits_dict = {
+                0.2 : m_20,
+                0.1 : m_10,
+                0.05 : m_5,
+                0.01 : m_1,
+                residue/formulation.Q : 1 if residue != 0 else 0 # We use this trick to use the same logic for the residual case since new_demand = residue/Q * Q = residue
+            }
+            # We find the node with the biggest index and create new nodes starting from that
+            max_node: int = max(self.V)
+            c: int = 1
+            # We split the node
+            for split in splits_dict:
+                for _ in range(0, splits_dict[split]):
+                    new_node = max_node + c
+                    new_demand = split*formulation.Q
+                    # Add the split to the nodes
+                    self.V.add(new_node)
+                    if v not in self._splits_mapping: 
+                        self._splits_mapping[v] = {new_node}
+                    else: 
+                        self._splits_mapping[v].add(new_node)
+                    # Add the split node to the split demand
+                    self.demands[new_node] = new_demand
+                    # Create new arcs
+                    for arc in self.A.copy():
+                        # We don't account for self loops as they should be impossible
+                        if arc[0] == v:
+                            new_arc = (new_node, arc[1])
+                            self.A.add(new_arc)
+                            self.costs[new_arc] = self.costs[arc]
+                        if arc[1] == v:
+                            new_arc = (arc[0], new_node)
+                            self.A.add(new_arc)
+                            self.costs[new_arc] = self.costs[arc]
+                    c += 1
+            # We now connect all the new nodes to eachother with cost 0
+            combinations = itertools.product(self._splits_mapping[v], self._splits_mapping[v])
+            for arc in combinations:
+                if arc[0] != arc[1]:
+                    self.A.add(arc)
+                    self.costs[arc] = 0
+            # Now we remove the original node and its information
+            self.V.remove(v)
+            self.A = {arc for arc in self.A if arc[0] != v and arc[1] != v}
+            self.costs = {arc : self.costs[arc] for arc in self.A}
+            self.demands.pop(v)
+
+    def export_SDVRPF(self) -> SDVRPFormulation|None:
+        return None
+
+    
+class HygeseFormulation:
+    def __init__(self):
+        self.nodes: list[int] = []
+        self.distance_matrix: list[list[float]] = []
+        self.num_vehicles: int = 0
+        self.depot: int = 0
+        self.demands: list[float] = []
+        self.vehicle_capacity = 0
+        self.service_times = []
+
+    def import_CVRPF(self, formulation: CVRPFormulation):
+        # Hygese wants the depot at 0, so we need to perform a swap if the 0 index is already occupied by a node
+        if formulation.depot != 0 and 0 in formulation.V:
+            pass # FIX IF NEEDED
+        # We turn the nodes into an ordered list
+        self.nodes = sorted(list(formulation.V))
+        # We add their demands in order, depot demand must be zero
+        for node in self.nodes:
+            demand = 0
+            if node != formulation.depot:
+                demand = formulation.demands[node]
+            self.demands.append(demand)
+        # We build the distance matrix
+        for src in self.nodes:
+            distance_vector: list[float] = []
+            for dst in self.nodes:
+                distance: float = 0
+                if dst != src:
+                    distance = formulation.costs[(src, dst)]
+                distance_vector.append(distance)
+            self.distance_matrix.append(distance_vector)
+        self.num_vehicles = len(formulation.tours)
+        self.vehicle_capacity = formulation.Q
+        self.depot = self.nodes.index(formulation.depot) # CAPIRE SE FORZARE A ZERO
+        self.service_times = [formulation.t_sto] * len(self.demands)
+
+
+    def export_CVRPF(self) -> CVRPFormulation|None:
+        return None
+
+def main():
+    #ap = argparse.ArgumentParser(description="Parse Cm-CTP-R instance text file into CmCTPR_Instance.")
+    #ap.add_argument("path", type=str, help="Path to instance file")
+    #args = ap.parse_args()
+
+    formulation = RoadNetworkFormulation()
+    formulation.import_CmCTPRF("C:\\Users\\simon\\source\\repos\\mathematical-optimization\\data\\15-100-6.dat")
     print("RNF OK")
     print("|W| =", len(formulation.W))
     sampleWnode = random.choice(list(formulation.W))
@@ -223,9 +384,31 @@ def main():
     print("|A| =", len(formulation.A))
     print("|V_sto| =", len(formulation.V_sto))
 
-    formulation_cbf = CustomerBasedFormulation(args.path)
+    formulation_cbf = CustomerBasedFormulation()
+    formulation_cbf.import_CmCTPRF("C:\\Users\\simon\\source\\repos\\mathematical-optimization\\data\\15-100-6.dat")
     print("CBF OK")
-    
+    formulation_sdvrp =  SDVRPFormulation()
+    formulation_sdvrp.import_CBF(formulation_cbf, {5, 6, 7, 153})
+    formulation_cvrp = CVRPFormulation()
+    formulation_cvrp.import_SDVRPF(formulation_sdvrp)
+    formulation_hgs = HygeseFormulation()
+    formulation_hgs.import_CVRPF(formulation_cvrp)
+    formulation_hgs.distance_matrix
+    import hygese as hgs
+    data = dict()
+    data['distance_matrix'] = formulation_hgs.distance_matrix
+    data['num_vehicles']  = formulation_hgs.num_vehicles
+    data['depot'] = formulation_hgs.depot
+    data['demands'] = formulation_hgs.demands
+    data['vehicle_capacity'] = formulation_hgs.vehicle_capacity
+    data['service_times'] = formulation_hgs.service_times
+    ap = hgs.AlgorithmParameters(timeLimit=100)  # seconds
+    hgs_solver = hgs.Solver(parameters=ap, verbose=True)
+
+    # Solve
+    result = hgs_solver.solve_cvrp(data)
+    print(result.cost)
+    print(result.routes)
 
 if __name__ == "__main__":
     main()
