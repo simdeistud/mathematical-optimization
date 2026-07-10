@@ -223,7 +223,7 @@ class SDVRPFormulation:
         self.t_sto: float = 0
 
     def import_CBF(self, formulation: CustomerBasedFormulation, V_sel: set[int]):
-        self.V = V_sel
+        self.V = V_sel.union({formulation.sigma})
         # We remove arcs and costs that are not related to V_sel nodes
         self.A = {arc for arc in formulation.Ap if arc[0] in self.V and arc[1] in self.V and arc[0] != arc[1]}
         self.costs = {arc : formulation.c[arc] for arc in self.A}
@@ -233,11 +233,11 @@ class SDVRPFormulation:
         self.t_sto = formulation.t_sto
         # For each demand node, we take its first favourite disposal location that is also in V_sel.
         # Then, we associate and aggregate its demand to the V_sel node.
-        for v in V_sel:
+        for v in self.V:
             self.demands[v] = 0
         for w in formulation.W:
             for v in formulation.V_rank[w]:
-                if v in V_sel:
+                if v in self.V:
                     self.demands[v] += formulation.d[w]
                     break
 
@@ -335,19 +335,63 @@ class HygeseFormulation:
         self.demands: list[float] = []
         self.vehicle_capacity = 0
         self.service_times = []
+        self._depot_swap: int = 0
 
     def import_CVRPF(self, formulation: CVRPFormulation):
         # Hygese wants the depot at 0, so we need to perform a swap if the 0 index is already occupied by a node
-        if formulation.depot != 0 and 0 in formulation.V:
+        self.depot = 0
+        if formulation.depot != 0:
+            swapped_formulation = CVRPFormulation()
+            swapped_formulation.V = formulation.V
+            self._depot_swap = formulation.depot
+
+            # We set the depot demand
+            swapped_formulation.demands = formulation.demands
+            if 0 in formulation.V:
+                swapped_demand = formulation.demands[0]
+                swapped_formulation.demands[self._depot_swap] = swapped_demand
+            else:
+                swapped_formulation.V.remove(self._depot_swap)
+                swapped_formulation.V.add(0)
+            swapped_formulation.demands[0] = 0
+
+            # We swap the arcs and their costs
+            swapped_formulation.A = set()
+            swapped_formulation.costs = {}
+            for arc in formulation.A:
+                new_arc = arc
+                if arc[0] == 0 and arc[1] == self._depot_swap or arc[1] == 0 and arc[0] == self._depot_swap:
+                    new_arc = (arc[1], arc[0])
+                elif arc[0] == 0:
+                    new_arc = (self._depot_swap, arc[1])
+                elif arc[1] == 0:
+                    new_arc = (arc[0], self._depot_swap)
+                elif arc[0] == self._depot_swap:
+                    new_arc = (0, arc[1])
+                elif arc[1] == self._depot_swap:
+                    new_arc = (arc[0], 0)
+                swapped_formulation.A.add(new_arc)
+                swapped_formulation.costs[new_arc] = formulation.costs[arc]
+
+            swapped_formulation.tours = formulation.tours
+            swapped_formulation.Q = formulation.Q
+            swapped_formulation.depot = 0
+            swapped_formulation.t_sto = formulation.t_sto
+            swapped_formulation._splits_mapping = {}
+            
+            formulation = swapped_formulation
             pass # FIX IF NEEDED
         # We turn the nodes into an ordered list
         self.nodes = sorted(list(formulation.V))
-        # We add their demands in order, depot demand must be zero
+        # We add their demands and service times in order, depot demand and t_sto must be zero
         for node in self.nodes:
             demand = 0
-            if node != formulation.depot:
+            service_time = 0
+            if node != 0:
                 demand = formulation.demands[node]
+                service_time = formulation.t_sto
             self.demands.append(demand)
+            self.service_times.append(service_time)
         # We build the distance matrix
         for src in self.nodes:
             distance_vector: list[float] = []
@@ -359,9 +403,6 @@ class HygeseFormulation:
             self.distance_matrix.append(distance_vector)
         self.num_vehicles = len(formulation.tours)
         self.vehicle_capacity = formulation.Q
-        self.depot = self.nodes.index(formulation.depot) # CAPIRE SE FORZARE A ZERO
-        self.service_times = [formulation.t_sto] * len(self.demands)
-
 
     def export_CVRPF(self) -> CVRPFormulation|None:
         return None
@@ -402,7 +443,7 @@ def main():
     data['demands'] = formulation_hgs.demands
     data['vehicle_capacity'] = formulation_hgs.vehicle_capacity
     data['service_times'] = formulation_hgs.service_times
-    ap = hgs.AlgorithmParameters(timeLimit=100)  # seconds
+    ap = hgs.AlgorithmParameters(nbIter=10000) # N. of iterations without improvement
     hgs_solver = hgs.Solver(parameters=ap, verbose=True)
 
     # Solve
