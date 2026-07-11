@@ -174,4 +174,4 @@ def solve(dat_path: str, TIME_LIMIT:int = 300):
     # Optimize
     model.setParam("TimeLimit", TIME_LIMIT)
     model.optimize()
-    return model.objVal, model.Runtime
+    return model.objVal, model.Runtime, model

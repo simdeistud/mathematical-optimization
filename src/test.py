@@ -6,9 +6,9 @@ import os
 dirname = os.path.dirname(__file__)
 filename = os.path.join(dirname, '../data/15-50-1.dat')
 
-cbf_cost, cbf_time = CBF.solve(filename)
-rnf_cost, rnf_time = RNF.solve(filename)
-heur_cost, heur_time = Heuristic.solve(filename)
+cbf_cost, cbf_time, _ = CBF.solve(filename)
+rnf_cost, rnf_time, _ = RNF.solve(filename)
+heur_cost, heur_time, _ = Heuristic.solve(filename)
 
 print("Customer Based Formulation (MILP, Gurobi)")
 print(f"Execution time: {cbf_time} seconds")

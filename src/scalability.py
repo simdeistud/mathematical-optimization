@@ -17,9 +17,9 @@ for nodes in [15, 50]:
         for tours in [1, 2, 6]:
             filename = os.path.join(dirname, f'../data/{nodes}-{gamma}-{tours}.dat')
 
-            cbf_cost[(nodes, gamma, tours)], cbf_time[(nodes, gamma, tours)] = CBF.solve(filename)
-            rnf_cost[(nodes, gamma, tours)], rnf_time[(nodes, gamma, tours)] = RNF.solve(filename)
-            heur_cost[(nodes, gamma, tours)], heur_time[(nodes, gamma, tours)] = Heuristic.solve(filename)
+            cbf_cost[(nodes, gamma, tours)], cbf_time[(nodes, gamma, tours)], _ = CBF.solve(filename)
+            rnf_cost[(nodes, gamma, tours)], rnf_time[(nodes, gamma, tours)], _ = RNF.solve(filename)
+            heur_cost[(nodes, gamma, tours)], heur_time[(nodes, gamma, tours)], _ = Heuristic.solve(filename)
 
             results.append([
                 nodes, gamma, tours,

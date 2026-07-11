@@ -202,7 +202,7 @@ def solve(dat_path: str, TIME_LIMIT:int = 300):
         iteration_end_time = time.time()
         elapsed_time += iteration_end_time - iteration_start_time
 
-    return bestSol[0].cost, elapsed_time
+    return bestSol[0].cost, elapsed_time, bestSol[0]
 
             
 
