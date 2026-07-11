@@ -196,7 +196,9 @@ def solve(dat_path: str, TIME_LIMIT:int = 300):
         solution = instance.SDVRPF_solution_to_CBF(CVRP.solution_to_SDVRPF(HGS.solution_to_CVRPF(CVRPSol)))
         if solution[2] < bestSol[2]:
             bestSol = solution
-        consecutive_without_improvement += 1
+            consecutive_without_improvement = 0
+        else:
+            consecutive_without_improvement += 1
         iteration_end_time = time.time()
         elapsed_time += iteration_end_time - iteration_start_time
     
