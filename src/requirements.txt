@@ -1,4 +1,3 @@
 gurobipy
 hygese
-networkx
 matplotlib
