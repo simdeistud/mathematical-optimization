@@ -145,7 +145,7 @@ def solve(dat_path: str, TIME_LIMIT:int = 300):
     treated_set_covers: dict[frozenset[int], float] = {}
     consecutive_without_improvement = 0
     elapsed_time = 0
-    bestSol = (None, math.inf)
+    bestSol = (None, None, math.inf)
     while elapsed_time < TIME_LIMIT and consecutive_without_improvement < 100:
         iteration_start_time = time.time()
         # PHASE 1
@@ -189,25 +189,19 @@ def solve(dat_path: str, TIME_LIMIT:int = 300):
         ap = hgs.AlgorithmParameters(nbIter=10000) # N. of iterations without improvement
         hgs_solver = hgs.Solver(parameters=ap, verbose=True)
         CVRPSol = hgs_solver.solve_cvrp(data)
-
-        if CVRPSol.cost < bestSol[1]:
-            bestSol = (CVRPSol, CVRPSol.cost)
-            consecutive_without_improvement = 0
+        #if CVRPSol.cost < bestSol[1]:
+         #   bestSol = (CVRPSol, CVRPSol.cost)
+          #  consecutive_without_improvement = 0
         # TransformCVRPSol intoaSDVRPsolution:SDVRPSol
-        #SDVRPSol: set[int] = set()
-        #SDVRPSol_cost: float = 0
-        #if SDVRPSol_cost < bestSol[1]:
-        # bestSol = (SDVRPSol, SDVRPSol_cost)
+        solution = instance.SDVRPF_solution_to_CBF(CVRP.solution_to_SDVRPF(HGS.solution_to_CVRPF(CVRPSol)))
+        if solution[2] < bestSol[2]:
+            bestSol = solution
         consecutive_without_improvement += 1
         iteration_end_time = time.time()
         elapsed_time += iteration_end_time - iteration_start_time
+    
 
-    return bestSol[0].cost, elapsed_time, bestSol[0]
-
-            
-
-        
-                
+    return bestSol[2], elapsed_time, bestSol
             
 
 

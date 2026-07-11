@@ -1,7 +1,6 @@
 import heapq
 import math
 import random
-import argparse
 import itertools
 
 # Class modeling a generic instance of the C𝑚-CTP-R problem
@@ -161,6 +160,19 @@ class CustomerBasedFormulation(CmCTPRFormulation):
                 if time == math.inf:
                     raise ValueError(f"No path from {j} to {jp} in the underlying road network")   
                 self.c[(j, jp)] = time
+    
+    def SDVRPF_solution_to_CBF(self, SDVRPF_solution: tuple[list[list[int]], list[list[float]]]) -> tuple[list[list[int]], list[list[float]], float]:
+        cost: float = 0
+        for tour in SDVRPF_solution[0]:
+            # We traverse each tour, adding the cost of the arcs and, if present, t_stop
+            for i in range(0, len(tour)-1):
+                cost += self.c[tour[i], tour[i+1]]
+                if tour[i+1] != self.sigma:
+                    cost += self.t_sto
+        return SDVRPF_solution[0], SDVRPF_solution[1], cost
+    
+    def gurobi_solution_to_CBF(self, gurobi_solution) -> tuple[list[list[int]], list[list[float]], float]:
+        pass
 
 # Helper function to calculate shortest path between nodes using Dijkstra
 def dijkstra_min_cost(
@@ -252,6 +264,7 @@ class CVRPFormulation:
         self.depot: int = 0
         self.t_sto: float = 0
         self._splits_mapping: dict[int, set[int]] = {}
+        self._splits_inverted_mapping: dict[int, int] = {}
     
     def import_SDVRPF(self, formulation: SDVRPFormulation):
         self.V = formulation.V.copy()
@@ -296,6 +309,8 @@ class CVRPFormulation:
                         self._splits_mapping[v] = {new_node}
                     else: 
                         self._splits_mapping[v].add(new_node)
+                    # We keep an inverted index for ease of conversion afterwards
+                    self._splits_inverted_mapping[new_node] = v
                     # Add the split node to the split demand
                     self.demands[new_node] = new_demand
                     # Create new arcs
@@ -321,6 +336,25 @@ class CVRPFormulation:
             self.A = {arc for arc in self.A if arc[0] != v and arc[1] != v}
             self.costs = {arc : self.costs[arc] for arc in self.A}
             self.demands.pop(v)
+    
+    def solution_to_SDVRPF(self, CVRPF_solution: list[list[int]]) -> tuple[list[list[int]], list[list[float]]]:
+        SDVRPF_solution: list[list[int]] = []
+        collections: list[list[float]] = []
+        for tour in CVRPF_solution:
+            SDVRPF_tour: list[int] = []
+            collections_tour: list[float] = []
+            for node in tour:
+                # We search if the node was split, and if yet, what was the original node
+                original_node = self._splits_inverted_mapping[node] if node in self._splits_inverted_mapping else node     
+                # If the tour subsequently visits nodes that were split from the same original one, we aggregate them together as a single stop
+                if len(SDVRPF_tour) > 0 and original_node == SDVRPF_tour[-1]:
+                    collections_tour[-1] += self.demands[node]
+                else:         
+                    SDVRPF_tour.append(original_node)
+                    collections_tour.append(self.demands[node])
+            SDVRPF_solution.append(SDVRPF_tour)
+            collections.append(collections_tour)
+        return SDVRPF_solution, collections
     
 class HygeseFormulation:
     def __init__(self):
@@ -398,7 +432,34 @@ class HygeseFormulation:
                 distance_vector.append(distance)
             self.distance_matrix.append(distance_vector)
         self.num_vehicles = len(formulation.tours)
-        self.vehicle_capacity = formulation.Q        
+        self.vehicle_capacity = formulation.Q  
+
+    def solution_to_CVRPF(self, hygese_solution) -> list[list[int]]:
+        CVRPF_solution: list[list[int]] = []
+        # Hygese gives us lists of indexes, which we must convert back to node IDs
+        CVRPF_conv: list[list[int]] = []
+        for tour in hygese_solution.routes:
+            CVRPF_tour: list[int] = []
+            for node in tour:
+                CVRPF_tour.append(self.nodes[node])
+            CVRPF_conv.append(CVRPF_tour)
+
+        if self._depot_swap != 0:
+            for tour in CVRPF_conv:
+                CVRPF_tour: list[int] = []
+                for node in tour:
+                    if node == self._depot_swap:
+                        CVRPF_tour.append(0)
+                    elif node == 0:
+                        CVRPF_tour.append(self._depot_swap)
+                    else:
+                        CVRPF_tour.append(node)
+                # Hygese doesn't keep the depot in the solution, so we add it at the beginning and end of the tour
+                CVRPF_tour.insert(0, self._depot_swap)
+                CVRPF_tour.append(self._depot_swap)
+                CVRPF_solution.append(CVRPF_tour)
+        return CVRPF_solution
+
 
 def main():
     #ap = argparse.ArgumentParser(description="Parse Cm-CTP-R instance text file into CmCTPR_Instance.")
@@ -406,7 +467,7 @@ def main():
     #args = ap.parse_args()
 
     formulation = RoadNetworkFormulation()
-    formulation.import_CmCTPRF("C:\\Users\\simon\\source\\repos\\mathematical-optimization\\data\\15-100-6.dat")
+    formulation.import_CmCTPRF("C:\\Users\\simon\\source\\repos\\mathematical-optimization\\data\\15-50-1.dat")
     print("RNF OK")
     print("|W| =", len(formulation.W))
     sampleWnode = random.choice(list(formulation.W))
@@ -419,7 +480,7 @@ def main():
     print("|V_sto| =", len(formulation.V_sto))
 
     formulation_cbf = CustomerBasedFormulation()
-    formulation_cbf.import_CmCTPRF("C:\\Users\\simon\\source\\repos\\mathematical-optimization\\data\\15-100-6.dat")
+    formulation_cbf.import_CmCTPRF("C:\\Users\\simon\\source\\repos\\mathematical-optimization\\data\\15-50-1.dat")
     print("CBF OK")
     formulation_sdvrp =  SDVRPFormulation()
     formulation_sdvrp.import_CBF(formulation_cbf, {5, 6, 7, 153})
@@ -436,12 +497,11 @@ def main():
     data['demands'] = formulation_hgs.demands
     data['vehicle_capacity'] = formulation_hgs.vehicle_capacity
     data['service_times'] = formulation_hgs.service_times
-    ap = hgs.AlgorithmParameters(nbIter=10000) # N. of iterations without improvement
+    ap = hgs.AlgorithmParameters(nbIter=1000) # N. of iterations without improvement
     hgs_solver = hgs.Solver(parameters=ap, verbose=True)
 
     # Solve
     result = hgs_solver.solve_cvrp(data)
-    print(result.cost)
     print(result.routes)
 
 if __name__ == "__main__":
