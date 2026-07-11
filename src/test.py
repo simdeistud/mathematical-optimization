@@ -4,7 +4,7 @@ import Heuristic
 import os
 
 dirname = os.path.dirname(__file__)
-filename = os.path.join(dirname, '../data/15-50-2.dat')
+filename = os.path.join(dirname, '../data/15-50-1.dat')
 
 cbf_cost, cbf_time = CBF.solve(filename)
 rnf_cost, rnf_time = RNF.solve(filename)
