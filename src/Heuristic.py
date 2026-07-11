@@ -138,8 +138,9 @@ def solve(dat_path: str, TIME_LIMIT:int = 300):
                 for group in G_avail.copy():
                     if j_star in group:
                         G_avail.remove(group)
-        cost_V_sel = giantTour_c
-        return V_sel, cost_V_sel
+        # We return the nodes selected into the giant tour
+        final_V_sel = frozenset(giantTour[1:-1])
+        return set(final_V_sel), giantTour_c
 
     best_set_covers: dict[frozenset[int], float] = {}
     treated_set_covers: dict[frozenset[int], float] = {}
