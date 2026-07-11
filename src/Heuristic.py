@@ -190,10 +190,7 @@ def solve(dat_path: str, TIME_LIMIT:int = 300):
         ap = hgs.AlgorithmParameters(nbIter=10000) # N. of iterations without improvement
         hgs_solver = hgs.Solver(parameters=ap, verbose=True)
         CVRPSol = hgs_solver.solve_cvrp(data)
-        #if CVRPSol.cost < bestSol[1]:
-         #   bestSol = (CVRPSol, CVRPSol.cost)
-          #  consecutive_without_improvement = 0
-        # TransformCVRPSol intoaSDVRPsolution:SDVRPSol
+
         solution = instance.SDVRPF_solution_to_CBF(CVRP.solution_to_SDVRPF(HGS.solution_to_CVRPF(CVRPSol)))
         if solution[2] < bestSol[2]:
             bestSol = solution
