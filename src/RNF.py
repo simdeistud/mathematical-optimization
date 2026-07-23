@@ -168,9 +168,10 @@ def solve(dat_path: str, TIME_LIMIT:int = 300):
 
         # 2c
         model.addConstr(
-            (
-                gp.quicksum(y[j, k] - s[j] for j in V_sto for k in M) <= len(M) - 1
-            ),
+            gp.quicksum(
+                gp.quicksum(y[j, k] for k in M) - s[j]
+                for j in V_sto
+            ) <= len(M) - 1,
             name="2c"
         )
 

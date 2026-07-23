@@ -5,7 +5,7 @@ import os
 from utils.eulerize import reconstruct_tours
 
 dirname = os.path.dirname(__file__)
-filename = os.path.join(dirname, '../data/15-50-6.dat')
+filename = os.path.join(dirname, '../data/15-0-2.dat')
 
 #cbf_cost, cbf_time, _ = CBF.solve(filename)
 rnf_cost, rnf_time, x = RNF.solve(filename)

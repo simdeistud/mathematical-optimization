@@ -1,3 +1,9 @@
 gurobipy
 hygese
 numpy
+matplotlib 
+contextily 
+geopandas 
+shapely 
+pyproj 
+xyzservices
