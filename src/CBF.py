@@ -174,4 +174,13 @@ def solve(dat_path: str, TIME_LIMIT:int = 300):
     # Optimize
     model.setParam("TimeLimit", TIME_LIMIT)
     model.optimize()
-    return model.objVal, model.Runtime, model
+
+    # Copy the optimized x values into an ordinary Python dictionary.
+    # Only positive arcs are required for Eulerian reconstruction.
+    x_values = {
+        key: int(round(var.X))
+        for key, var in x.items()
+        if var.X > 1e-6
+    }
+    
+    return model.objVal, model.Runtime, x_values
